@@ -3,3 +3,11 @@
 /coverage.out
 .env
 *.test
+
+# Local credentials and development TLS material
+local-*.json
+local-*.crt
+local-*.key
+agent.json
+agents.json
+*.key
