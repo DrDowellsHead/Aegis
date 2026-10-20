@@ -180,7 +180,8 @@ func (r Registry) Authenticate(id, token string) bool {
 	}
 	expected, ok := r.hashes[id]
 	computed := sha256.Sum256([]byte(token))
-	return ok && subtle.ConstantTimeCompare(expected[:], computed[:]) == 1
+	match := subtle.ConstantTimeCompare(expected[:], computed[:]) == 1
+	return ok && match
 }
 
 func ensureParent(path string) error {

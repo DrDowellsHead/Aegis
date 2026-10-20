@@ -56,9 +56,17 @@ func GenerateDevelopmentTLS(host, caPath, certPath, keyPath string) error {
 	if err != nil {
 		return err
 	}
+	caSerial, err := randomSerial()
+	if err != nil {
+		return err
+	}
+	serverSerial, err := randomSerial()
+	if err != nil {
+		return err
+	}
 	now := time.Now()
 	ca := &x509.Certificate{
-		SerialNumber: randomSerial(), Subject: pkix.Name{CommonName: "Aegis development CA"},
+		SerialNumber: caSerial, Subject: pkix.Name{CommonName: "Aegis development CA"},
 		NotBefore: now.Add(-5 * time.Minute), NotAfter: now.Add(365 * 24 * time.Hour),
 		IsCA: true, BasicConstraintsValid: true,
 		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
@@ -68,7 +76,7 @@ func GenerateDevelopmentTLS(host, caPath, certPath, keyPath string) error {
 		return err
 	}
 	leaf := &x509.Certificate{
-		SerialNumber: randomSerial(), Subject: pkix.Name{CommonName: host},
+		SerialNumber: serverSerial, Subject: pkix.Name{CommonName: host},
 		NotBefore: now.Add(-5 * time.Minute), NotAfter: now.Add(90 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
@@ -123,12 +131,14 @@ func validDNS(host string) bool {
 	return true
 }
 
-func randomSerial() *big.Int {
-	// The failure of crypto/rand is reported by CreateCertificate itself,
-	// but serial-number randomness should also be checked explicitly.
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return big.NewInt(1)
+func randomSerial() (*big.Int, error) {
+	for {
+		n, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+		if err != nil {
+			return nil, fmt.Errorf("generate certificate serial: %w", err)
+		}
+		if n.Sign() > 0 {
+			return n, nil
+		}
 	}
-	return new(big.Int).SetBytes(b[:])
 }
