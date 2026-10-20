@@ -60,6 +60,8 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 			return 1
 		}
 		return 0
+	case "history":
+		return runHistory(ctx,args[1:],errOut)
 	case "migrate":
 		return runMigrate(ctx, args[1:], out, errOut)
 	case "provision":
@@ -107,5 +109,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|migrate|provision|cert|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|history|migrate|provision|cert|check|collect|agent|version|help> [options]")
 }

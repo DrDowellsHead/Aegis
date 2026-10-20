@@ -23,11 +23,11 @@ func (p *Postgres) Ready(ctx context.Context) error {
 	}
 	var count int
 	if err := p.db.QueryRowContext(ctx,
-		"SELECT count(*) FROM aegis_schema_migrations WHERE version IN ('001_measurements.sql','002_started_at_index.sql')").
+		"SELECT count(*) FROM aegis_schema_migrations WHERE version IN ('001_measurements.sql','002_started_at_index.sql','003_history_cursor_index.sql')").
 		Scan(&count); err != nil {
 		return fmt.Errorf("check migration ledger: %w", err)
 	}
-	if count != 2 {
+	if count != 3 {
 		return fmt.Errorf("database schema is not up to date")
 	}
 	return nil

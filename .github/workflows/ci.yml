@@ -87,4 +87,4 @@ jobs:
           go-version: '1.27.3'
           cache: false
       - name: PostgreSQL + authenticated gRPC integration
-        run: go test -race -count=1 -timeout=90s ./internal/storage ./internal/telemetry
+        run: go test -race -count=1 -timeout=90s ./internal/storage ./internal/telemetry ./internal/history

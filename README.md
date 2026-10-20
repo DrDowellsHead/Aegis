@@ -14,7 +14,7 @@ Aegis — учебно-практическая платформа монито�
 1. CLI, жизненный цикл сервера, HTTP-проверки доступности.
 2. Агент со сбором CPU, RAM, диска и сети на Windows, macOS и Linux.
 3. Защищённая передача измерений через gRPC.
-4. PostgreSQL, миграции и затем API истории.
+4. PostgreSQL, миграции и локальный API истории.
 5. Инциденты, уведомления и наблюдаемость самой системы.
 6. Проверка отказов, производительности и развёртывание на одном VPS.
 
@@ -39,7 +39,8 @@ go run ./cmd/aegis serve
 go run ./cmd/aegis check --url http://127.0.0.1:8080/healthz
 ```
 
-gRPC-передача защищена TLS и токенами. PostgreSQL сохраняет измерения с проверкой\nповторов. API истории и уведомления ещё не реализованы.
+gRPC-передача защищена TLS и токенами. PostgreSQL сохраняет измерения с проверкой
+повторов. API истории реализован для локального доступа; уведомления ещё не реализованы.
 
 ## Локальный агент метрик
 
@@ -65,7 +66,9 @@ go run ./cmd/aegis cert --host 127.0.0.1 --ca-cert local-ca.crt --tls-cert local
 go run ./cmd/aegis provision --agents-file local-agents.json --credentials local-agent.json
 ```
 
-После настройки PostgreSQL и выполнения миграций (см. этап 3.4)\nв первом терминале запустите сервер:\n
+После настройки PostgreSQL и выполнения миграций (см. этап 3.4)
+в первом терминале запустите сервер:
+
 ```sh
 go run ./cmd/aegis receive --listen 127.0.0.1:9090 --tls-cert local-server.crt --tls-key local-server.key --agents-file local-agents.json
 ```
@@ -92,7 +95,8 @@ go run ./cmd/aegis send --server 127.0.0.1:9090 --credentials local-agent.json -
 На Windows дополнительно проверьте ACL, чтобы секреты были доступны
 только вашей учётной записи/службе. Никогда не публикуйте их в GitHub.
 Самоподписанный демонстрационный CA не предназначен для серьёзного развёртывания.
-Передача защищена; отдельная команда `forward` реализует очередь и повторы.\nРотация и отзыв токенов, а также административный интерфейс ещё не реализованы.
+Передача защищена; отдельная команда `forward` реализует очередь и повторы.
+Ротация и отзыв токенов, а также административный интерфейс ещё не реализованы.
 
 Контракт: [telemetry.proto](api/proto/aegis/telemetry/v1/telemetry.proto).
 Документы: [ADR 0003](docs/adr/0003-telemetry-contract.md),
@@ -153,3 +157,52 @@ SELECT agent_id, count(*) FROM aegis_measurements GROUP BY agent_id;
 ```
 
 Полное описание: [ADR 0006](docs/adr/0006-postgresql-durable-ack.md).
+
+## История измерений через HTTP (этап 3.5)
+
+Агент по-прежнему отправляет метрики gRPC-серверу `receive`.
+Отдельная команда `history` даёт доступ к сохранённым измерениям
+только через локальный интерфейс и **отдельный операторский токен**.
+Нельзя использовать для этого токен агента.
+
+Для Windows PowerShell (после настройки PostgreSQL из этапа 3.4):
+
+```powershell
+$env:AEGIS_DATABASE_URL = "postgres://aegis:dev-only-change-this@127.0.0.1:5432/aegis?sslmode=disable"
+go run ./cmd/aegis migrate
+$env:AEGIS_HISTORY_TOKEN = "demo-only-replace-with-a-random-32byte-secret"
+go run ./cmd/aegis history --listen 127.0.0.1:8081
+```
+
+Лучше использовать отдельную SQL-учётную запись с правами только на SELECT
+по таблицам `aegis_measurements` и `aegis_schema_migrations`, а не роль,
+которой `receive` пишет в базу. В отдельном PowerShell-терминале укажите
+те же `AEGIS_HISTORY_TOKEN` и UUID из `local-agent.json`:
+
+```powershell
+$agentId = (Get-Content local-agent.json | ConvertFrom-Json).agent_id
+$headers = @{Authorization = "Bearer $env:AEGIS_HISTORY_TOKEN"}
+Invoke-RestMethod -Headers $headers -Uri "http://127.0.0.1:8081/api/v1/measurements?agent_id=$agentId&limit=5"
+```
+
+Если запрос вернул `next_cursor`, следующую страницу можно получить так:
+
+```powershell
+$page = Invoke-RestMethod -Headers $headers -Uri "http://127.0.0.1:8081/api/v1/measurements?agent_id=$agentId&limit=5"
+if ($page.has_more) {
+    $cursor = [uri]::EscapeDataString($page.next_cursor)
+    Invoke-RestMethod -Headers $headers -Uri "http://127.0.0.1:8081/api/v1/measurements?agent_id=$agentId&limit=5&cursor=$cursor"
+}
+```
+
+Поддерживаются `from` (включительно), `to` (исключительно) в RFC 3339,
+`limit` (1..100) и курсорная пагинация. Старые снимки из PostgreSQL
+преобразуются из Protobuf в JSON, сохраняя структуру CPU, памяти,
+диска и сети и сообщения о частичных ошибках.
+
+**Безопасность:** текущее HTTP API слушает только 127.0.0.1/::1.
+Не ставьте перед ним публичный прокси и не публикуйте порт 8081
+в интернет: для удалённого доступа понадобятся TLS, надёжная
+административная аутентификация и политика авторизации.
+
+Подробнее: [ADR 0007](docs/adr/0007-history-api.md).
