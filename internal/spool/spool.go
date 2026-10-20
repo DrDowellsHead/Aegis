@@ -226,9 +226,13 @@ func (q *Queue) Peek() (Record, bool) {
 	defer q.mu.Unlock()
 	var first string
 	for name := range q.entries {
-		if first == "" || name < first { first = name }
+		if first == "" || name < first {
+			first = name
+		}
 	}
-	if first == "" { return Record{}, false }
+	if first == "" {
+		return Record{}, false
+	}
 	return q.entries[first].record, true
 }
 
@@ -238,17 +242,19 @@ func (q *Queue) Ack(measurementID string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	for name, item := range q.entries {
-		if item.record.MeasurementID != measurementID { continue }
-		if err := os.Remove(filepath.Join(q.dir,name)); err != nil {
-			return fmt.Errorf("remove durably acknowledged record: %w",err)
+		if item.record.MeasurementID != measurementID {
+			continue
 		}
-		delete(q.entries,name)
+		if err := os.Remove(filepath.Join(q.dir, name)); err != nil {
+			return fmt.Errorf("remove durably acknowledged record: %w", err)
+		}
+		delete(q.entries, name)
 		q.used -= item.size
-		if directory,err := os.Open(q.dir); err == nil {
+		if directory, err := os.Open(q.dir); err == nil {
 			_ = directory.Sync() // best effort; replay after crash is safe
 			_ = directory.Close()
 		}
 		return nil
 	}
-	return fmt.Errorf("measurement ID %s not found in spool",measurementID)
+	return fmt.Errorf("measurement ID %s not found in spool", measurementID)
 }

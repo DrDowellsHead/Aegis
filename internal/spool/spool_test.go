@@ -133,16 +133,28 @@ func TestRejectsUnsafeDirectory(t *testing.T) {
 func TestAckDeletesOnlyConfirmedRecord(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "spool")
 	q, err := Open(dir, testAgent, MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	first, err := q.Append(snapshot())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	second, err := q.Append(snapshot())
-	if err != nil { t.Fatal(err) }
-	if err := q.Ack(first.MeasurementID); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Ack(first.MeasurementID); err != nil {
+		t.Fatal(err)
+	}
 	n, used := q.Stats()
-	if n != 1 || used <= 0 { t.Fatalf("count=%d bytes=%d", n, used) }
+	if n != 1 || used <= 0 {
+		t.Fatalf("count=%d bytes=%d", n, used)
+	}
 	reopened, err := Open(dir, testAgent, MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	found, ok := reopened.Peek()
 	if !ok || found.MeasurementID != second.MeasurementID {
 		t.Fatalf("wrong surviving record: %+v %v", found, ok)

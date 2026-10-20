@@ -86,8 +86,11 @@ func (x *SendRequest) GetSnapshot() *Snapshot {
 
 type SendResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Only volatile validation/receipt. Never a durable queue ACK.
-	Received      bool `protobuf:"varint,1,opt,name=received,proto3" json:"received,omitempty"`
+	// Older servers only send received; clients MUST NOT delete data on it.
+	Received bool `protobuf:"varint,1,opt,name=received,proto3" json:"received,omitempty"`
+	// Server confirms successful durable storage (including a stored duplicate).
+	Durable       bool `protobuf:"varint,2,opt,name=durable,proto3" json:"durable,omitempty"`
+	AlreadyStored bool `protobuf:"varint,3,opt,name=already_stored,json=alreadyStored,proto3" json:"already_stored,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -125,6 +128,20 @@ func (*SendResponse) Descriptor() ([]byte, []int) {
 func (x *SendResponse) GetReceived() bool {
 	if x != nil {
 		return x.Received
+	}
+	return false
+}
+
+func (x *SendResponse) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
+func (x *SendResponse) GetAlreadyStored() bool {
+	if x != nil {
+		return x.AlreadyStored
 	}
 	return false
 }
@@ -510,9 +527,11 @@ const file_aegis_telemetry_v1_telemetry_proto_rawDesc = "" +
 	"\vSendRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12%\n" +
 	"\x0emeasurement_id\x18\x02 \x01(\tR\rmeasurementId\x128\n" +
-	"\bsnapshot\x18\x03 \x01(\v2\x1c.aegis.telemetry.v1.SnapshotR\bsnapshot\"*\n" +
+	"\bsnapshot\x18\x03 \x01(\v2\x1c.aegis.telemetry.v1.SnapshotR\bsnapshot\"k\n" +
 	"\fSendResponse\x12\x1a\n" +
-	"\breceived\x18\x01 \x01(\bR\breceived\"\xa8\x04\n" +
+	"\breceived\x18\x01 \x01(\bR\breceived\x12\x18\n" +
+	"\adurable\x18\x02 \x01(\bR\adurable\x12%\n" +
+	"\x0ealready_stored\x18\x03 \x01(\bR\ralreadyStored\"\xa8\x04\n" +
 	"\bSnapshot\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x129\n" +
 	"\n" +

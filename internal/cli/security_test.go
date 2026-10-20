@@ -49,6 +49,8 @@ func TestSecureFlagsAreMandatory(t *testing.T) {
 func TestMigrateWithoutDatabase(t *testing.T) {
 	t.Setenv("AEGIS_DATABASE_URL", "")
 	var out, errOut bytes.Buffer
-	code:=Run(context.Background(), []string{"migrate"}, &out, &errOut, "test")
-	if code!=1 { t.Fatalf("missing DB accepted: code=%d stderr=%s",code,errOut.String()) }
+	code := Run(context.Background(), []string{"migrate"}, &out, &errOut, "test")
+	if code != 1 {
+		t.Fatalf("missing DB accepted: code=%d stderr=%s", code, errOut.String())
+	}
 }

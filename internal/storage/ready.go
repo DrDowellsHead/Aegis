@@ -8,19 +8,27 @@ import (
 
 // Ready is intentionally separate from Migrate: the server will not
 // silently mutate production schemas when starting.
-func(p *Postgres)Ready(ctx context.Context)error{
-	if p==nil||p.db==nil{return fmt.Errorf("database unavailable")}
-	var measurements,ledger sql.NullString
-	if err:=p.db.QueryRowContext(ctx,
-		"SELECT to_regclass('aegis_measurements')::text, to_regclass('aegis_schema_migrations')::text").
-		Scan(&measurements,&ledger);err!=nil{
-		return fmt.Errorf("check database schema: %w",err)
+func (p *Postgres) Ready(ctx context.Context) error {
+	if p == nil || p.db == nil {
+		return fmt.Errorf("database unavailable")
 	}
-	if !measurements.Valid||!ledger.Valid{return fmt.Errorf("schema has not been migrated")}
+	var measurements, ledger sql.NullString
+	if err := p.db.QueryRowContext(ctx,
+		"SELECT to_regclass('aegis_measurements')::text, to_regclass('aegis_schema_migrations')::text").
+		Scan(&measurements, &ledger); err != nil {
+		return fmt.Errorf("check database schema: %w", err)
+	}
+	if !measurements.Valid || !ledger.Valid {
+		return fmt.Errorf("schema has not been migrated")
+	}
 	var count int
-	if err:=p.db.QueryRowContext(ctx,
+	if err := p.db.QueryRowContext(ctx,
 		"SELECT count(*) FROM aegis_schema_migrations WHERE version IN ('001_measurements.sql','002_started_at_index.sql')").
-		Scan(&count);err!=nil{return fmt.Errorf("check migration ledger: %w",err)}
-	if count!=2{return fmt.Errorf("database schema is not up to date")}
+		Scan(&count); err != nil {
+		return fmt.Errorf("check migration ledger: %w", err)
+	}
+	if count != 2 {
+		return fmt.Errorf("database schema is not up to date")
+	}
 	return nil
 }

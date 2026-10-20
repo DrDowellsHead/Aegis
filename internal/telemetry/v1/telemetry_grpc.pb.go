@@ -27,7 +27,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // TelemetryService is a deliberately small unary ingestion API.
-// A successful RPC means received and validated, NOT durably stored.
+// A durable acknowledgement is sent only after the database commit.
 type TelemetryServiceClient interface {
 	Send(ctx context.Context, in *SendRequest, opts ...grpc.CallOption) (*SendResponse, error)
 }
@@ -55,7 +55,7 @@ func (c *telemetryServiceClient) Send(ctx context.Context, in *SendRequest, opts
 // for forward compatibility.
 //
 // TelemetryService is a deliberately small unary ingestion API.
-// A successful RPC means received and validated, NOT durably stored.
+// A durable acknowledgement is sent only after the database commit.
 type TelemetryServiceServer interface {
 	Send(context.Context, *SendRequest) (*SendResponse, error)
 	mustEmbedUnimplementedTelemetryServiceServer()

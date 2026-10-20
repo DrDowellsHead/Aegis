@@ -153,4 +153,7 @@ func TestTLSGRPCAndInvalidTrust(t *testing.T) {
 }
 
 type successStore struct{}
-func(successStore)Save(context.Context,string,string,*pb.Snapshot)(bool,error){return false,nil}
+
+func (successStore) Save(context.Context, string, string, *pb.Snapshot) (bool, error) {
+	return false, nil
+}
