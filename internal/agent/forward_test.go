@@ -144,17 +144,25 @@ func TestOptionsValidation(t *testing.T) {
 
 func TestCancellationInterruptsBackoffAfterCollectionDone(t *testing.T) {
 	q, err := spool.Open(filepath.Join(t.TempDir(), "outbox"), agentID, spool.MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	opts := testOptions(1)
-	opts.RetryMin = 10*time.Second
-	opts.RetryMax = 10*time.Second
+	opts.RetryMin = 10 * time.Second
+	opts.RetryMax = 10 * time.Second
 	started := time.Now()
-	err = Forward(ctx, &testCollector{}, &failThenSend{fail:10000}, q,
+	err = Forward(ctx, &testCollector{}, &failThenSend{fail: 10000}, q,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), opts)
-	if err != nil { t.Fatal(err) }
-	if time.Since(started)>time.Second { t.Fatal("cancel failed to interrupt retry timer") }
-	n,_ := q.Stats()
-	if n!=1 { t.Fatalf("canceled delivery erased queue: %d", n) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("cancel failed to interrupt retry timer")
+	}
+	n, _ := q.Stats()
+	if n != 1 {
+		t.Fatalf("canceled delivery erased queue: %d", n)
+	}
 }
