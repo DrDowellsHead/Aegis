@@ -47,7 +47,7 @@ func ServeReceiver(ctx context.Context, listener net.Listener, logger *slog.Logg
 		_ = listener.Close()
 		return err
 	}
-	server := grpc.NewServer(grpc.MaxRecvMsgSize(1 << 20), grpc.MaxConcurrentStreams(64))
+	server := grpc.NewServer(grpc.MaxRecvMsgSize(1<<20), grpc.MaxConcurrentStreams(64))
 	pb.RegisterTelemetryServiceServer(server, &Receiver{logger: logger})
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()

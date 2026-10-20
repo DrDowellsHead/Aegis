@@ -21,7 +21,7 @@ func sample() metrics.Snapshot {
 	return metrics.Snapshot{
 		SchemaVersion: 1, StartedAt: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC),
 		DurationMS: 150, OS: "linux", Arch: "amd64",
-		CPU: &metrics.CPU{UsedPercent: 12.5},
+		CPU:     &metrics.CPU{UsedPercent: 12.5},
 		Network: []metrics.Interface{},
 	}
 }

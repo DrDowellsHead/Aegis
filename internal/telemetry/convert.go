@@ -15,11 +15,11 @@ func EncodeSnapshot(s metrics.Snapshot) (*pb.Snapshot, error) {
 		return nil, fmt.Errorf("unsupported or invalid metrics snapshot")
 	}
 	result := &pb.Snapshot{
-		SchemaVersion: uint32(s.SchemaVersion),
-		StartedAt: timestamppb.New(s.StartedAt),
-		DurationMs: s.DurationMS,
-		Os: s.OS,
-		Arch: s.Arch,
+		SchemaVersion:    uint32(s.SchemaVersion),
+		StartedAt:        timestamppb.New(s.StartedAt),
+		DurationMs:       s.DurationMS,
+		Os:               s.OS,
+		Arch:             s.Arch,
 		NetworkAvailable: s.Network != nil,
 	}
 	if err := result.StartedAt.CheckValid(); err != nil {
