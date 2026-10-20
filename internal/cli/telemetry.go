@@ -22,7 +22,9 @@ func runProvision(args []string, out, errOut io.Writer) int {
 	registry := flags.String("agents-file", "", "server agent registry JSON path")
 	credentials := flags.String("credentials", "", "new per-agent credentials JSON path")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *registry == "" || *credentials == "" {
@@ -30,7 +32,10 @@ func runProvision(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	id, err := identity.Provision(*registry, *credentials)
-	if err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	fmt.Fprintln(out, "Provisioned agent:", id)
 	fmt.Fprintln(out, "Copy credentials securely to the agent; never commit the secret file.")
 	return 0
@@ -44,18 +49,20 @@ func runCert(args []string, out, errOut io.Writer) int {
 	cert := flags.String("tls-cert", "", "output server certificate path")
 	key := flags.String("tls-key", "", "output server private key path")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err,flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *ca == "" || *cert == "" || *key == "" {
 		fmt.Fprintln(errOut, "cert requires --ca-cert, --tls-cert and --tls-key")
 		return 2
 	}
-	if err := identity.GenerateDevelopmentTLS(*host,*ca,*cert,*key); err != nil {
-		fmt.Fprintln(errOut,err)
+	if err := identity.GenerateDevelopmentTLS(*host, *ca, *cert, *key); err != nil {
+		fmt.Fprintln(errOut, err)
 		return 1
 	}
-	fmt.Fprintln(out,"Generated development CA and server certificate. Distribute only the CA certificate to agents.")
+	fmt.Fprintln(out, "Generated development CA and server certificate. Distribute only the CA certificate to agents.")
 	return 0
 }
 
@@ -67,22 +74,33 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	key := flags.String("tls-key", "", "server TLS private key")
 	registryPath := flags.String("agents-file", "", "registry of authorized agents")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *cert == "" || *key == "" || *registryPath == "" {
 		fmt.Fprintln(errOut, "receive requires --tls-cert, --tls-key and --agents-file")
 		return 2
 	}
-	transport, err := telemetry.ServerCredentials(*cert,*key)
-	if err != nil { fmt.Fprintln(errOut,err); return 2 }
+	transport, err := telemetry.ServerCredentials(*cert, *key)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
 	registry, err := identity.LoadRegistry(*registryPath)
-	if err != nil { fmt.Fprintln(errOut,err); return 2 }
-	listener, err := net.Listen("tcp",*address)
-	if err != nil { fmt.Fprintln(errOut,err); return 1 }
-	logger := slog.New(slog.NewJSONHandler(errOut,nil))
-	if err := telemetry.ServeReceiver(ctx,listener,logger,transport,registry); err != nil {
-		fmt.Fprintln(errOut,err)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	listener, err := net.Listen("tcp", *address)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
+	logger := slog.New(slog.NewJSONHandler(errOut, nil))
+	if err := telemetry.ServeReceiver(ctx, listener, logger, transport, registry); err != nil {
+		fmt.Fprintln(errOut, err)
 		return 1
 	}
 	return 0
@@ -96,7 +114,9 @@ func runSend(ctx context.Context, args []string, out, errOut io.Writer) int {
 	caPath := flags.String("ca-cert", "", "trusted CA public certificate")
 	disk := flags.String("disk", ".", "filesystem path to measure")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *caPath == "" {
@@ -106,20 +126,41 @@ func runSend(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if *credentialsPath == "" {
 		var err error
 		*credentialsPath, err = identity.DefaultPath()
-		if err != nil { fmt.Fprintln(errOut,err); return 2 }
+		if err != nil {
+			fmt.Fprintln(errOut, err)
+			return 2
+		}
 	}
 	creds, err := identity.LoadCredentials(*credentialsPath)
-	if err != nil { fmt.Fprintln(errOut,err); return 2 }
-	system, err := metrics.NewSystem(*disk,250*time.Millisecond)
-	if err != nil { fmt.Fprintln(errOut,err); return 2 }
-	collector, err := metrics.New(system,3*time.Second)
-	if err != nil { fmt.Fprintln(errOut,err); return 2 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	system, err := metrics.NewSystem(*disk, 250*time.Millisecond)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	collector, err := metrics.New(system, 3*time.Second)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
 	snapshot, err := collector.Collect(ctx)
-	if err != nil { fmt.Fprintln(errOut,err); return 1 }
-	id, err := telemetry.SendOnce(ctx,*address,creds,*caPath,snapshot)
-	if err != nil { fmt.Fprintln(errOut,err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
+	id, err := telemetry.SendOnce(ctx, *address, creds, *caPath, snapshot)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	if err := json.NewEncoder(out).Encode(map[string]any{
-		"received":true, "durable":false, "measurement_id":id,
-	}); err != nil { fmt.Fprintln(errOut,err); return 1 }
+		"received": true, "durable": false, "measurement_id": id,
+	}); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	return 0
 }

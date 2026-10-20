@@ -21,15 +21,19 @@ import (
 // The registry is a snapshot: restart the receiver to load new provisions.
 type Receiver struct {
 	pb.UnimplementedTelemetryServiceServer
-	logger *slog.Logger
+	logger   *slog.Logger
 	registry identity.Registry
 }
 
 func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendResponse, error) {
 	// Never disclose whether an ID or a token was incorrect.
-	if req == nil { return nil, status.Error(codes.Unauthenticated, "invalid agent credentials") }
+	if req == nil {
+		return nil, status.Error(codes.Unauthenticated, "invalid agent credentials")
+	}
 	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok { return nil, status.Error(codes.Unauthenticated, "invalid agent credentials") }
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "invalid agent credentials")
+	}
 	authorization := md.Get("authorization")
 	if len(authorization) != 1 || !strings.HasPrefix(authorization[0], "Bearer ") ||
 		!r.registry.Authenticate(req.GetAgentId(), strings.TrimPrefix(authorization[0], "Bearer ")) {
@@ -46,14 +50,16 @@ func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendRespo
 		"measurement_id", req.MeasurementId,
 		"started_at", req.Snapshot.StartedAt.AsTime(),
 		"partial", len(req.Snapshot.Errors) > 0)
-	return &pb.SendResponse{Received:true}, nil
+	return &pb.SendResponse{Received: true}, nil
 }
 
 // ServeReceiver requires TLS and an authenticated registry; callers choose
 // the listener's interface (including public ones) explicitly.
 func ServeReceiver(ctx context.Context, listener net.Listener, logger *slog.Logger, transport credentials.TransportCredentials, registry identity.Registry) error {
 	if listener == nil || logger == nil || transport == nil {
-		if listener != nil { _ = listener.Close() }
+		if listener != nil {
+			_ = listener.Close()
+		}
 		return fmt.Errorf("listener, logger and TLS credentials are required")
 	}
 	server := grpc.NewServer(
@@ -73,11 +79,13 @@ func ServeReceiver(ctx context.Context, listener net.Listener, logger *slog.Logg
 		go func() { server.GracefulStop(); close(drained) }()
 		select {
 		case <-drained:
-		case <-time.After(5*time.Second):
+		case <-time.After(5 * time.Second):
 			server.Stop()
 			<-drained
 		}
-		if err := <-done; err != nil { return err }
+		if err := <-done; err != nil {
+			return err
+		}
 		logger.Info("telemetry receiver stopped")
 		return nil
 	}
