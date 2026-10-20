@@ -14,14 +14,16 @@ import (
 )
 
 // Sender is owned by its consumer. It must reuse Record.MeasurementID across retries.
-type Sender interface { Send(context.Context, spool.Record) error }
+type Sender interface {
+	Send(context.Context, spool.Record) error
+}
 
 type ForwardOptions struct {
-	Interval time.Duration
-	Count int // zero means run until cancellation
+	Interval       time.Duration
+	Count          int // zero means run until cancellation
 	RequestTimeout time.Duration
-	RetryMin time.Duration
-	RetryMax time.Duration
+	RetryMin       time.Duration
+	RetryMax       time.Duration
 }
 
 func (o ForwardOptions) validate() error {
@@ -37,62 +39,94 @@ func (o ForwardOptions) validate() error {
 // A volatile 'received' reply suppresses resending during THIS process lifetime,
 // but does not erase the disk record. Restart replays all records.
 func Forward(parent context.Context, source Source, sender Sender, q *spool.Queue, logger *slog.Logger, opts ForwardOptions) error {
-	if source == nil || sender == nil || q == nil || logger == nil { return fmt.Errorf("forward dependencies are required") }
-	if err := opts.validate(); err != nil { return err }
-	ctx,cancel := context.WithCancel(parent)
+	if source == nil || sender == nil || q == nil || logger == nil {
+		return fmt.Errorf("forward dependencies are required")
+	}
+	if err := opts.validate(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	wakeup:=make(chan struct{},1)
-	done:=make(chan struct{})
+	wakeup := make(chan struct{}, 1)
+	done := make(chan struct{})
 	var producerErr error
 	go func() {
 		defer close(done)
-		producerErr=collectLoop(ctx,source,q,logger,opts,wakeup)
+		producerErr = collectLoop(ctx, source, q, logger, opts, wakeup)
 	}()
-	sendErr:=sendLoop(ctx,sender,q,logger,opts,wakeup,done,&producerErr)
+	sendErr := sendLoop(ctx, sender, q, logger, opts, wakeup, done, &producerErr)
 	cancel()
 	<-done // ensure collector is joined before return
-	if parent.Err()!=nil { return nil } // Ctrl+C is a clean stop
-	if sendErr!=nil {return sendErr}
+	if parent.Err() != nil {
+		return nil
+	} // Ctrl+C is a clean stop
+	if sendErr != nil {
+		return sendErr
+	}
 	return producerErr
 }
 
 func collectLoop(ctx context.Context, source Source, q *spool.Queue, logger *slog.Logger, opts ForwardOptions, wakeup chan<- struct{}) error {
-	for n:=0;opts.Count==0 || n<opts.Count;n++ {
-		if ctx.Err()!=nil {return nil}
-		snapshot,err:=source.Collect(ctx)
-		if err!=nil {
-			if ctx.Err()!=nil {return nil}
-			return fmt.Errorf("collect metrics: %w",err)
+	for n := 0; opts.Count == 0 || n < opts.Count; n++ {
+		if ctx.Err() != nil {
+			return nil
 		}
-		if ctx.Err()!=nil {return nil}
-		record,err:=q.Append(snapshot)
-		if err!=nil {
-			if errors.Is(err,spool.ErrFull) {
+		snapshot, err := source.Collect(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("collect metrics: %w", err)
+		}
+		if ctx.Err() != nil {
+			return nil
+		}
+		record, err := q.Append(snapshot)
+		if err != nil {
+			if errors.Is(err, spool.ErrFull) {
 				logger.Error("spool full: metrics collection stopped without deleting old records")
 			}
-			return fmt.Errorf("enqueue metrics: %w",err)
+			return fmt.Errorf("enqueue metrics: %w", err)
 		}
-		logger.Info("measurement saved to disk","measurement_id",record.MeasurementID,"partial",len(snapshot.Errors)>0)
-		select {case wakeup<-struct{}{}:default:}
-		if opts.Count>0 && n+1==opts.Count {return nil}
-		timer:=time.NewTimer(opts.Interval)
+		logger.Info("measurement saved to disk", "measurement_id", record.MeasurementID, "partial", len(snapshot.Errors) > 0)
 		select {
-		case <-ctx.Done(): if !timer.Stop(){ select {case <-timer.C:default:} };return nil
+		case wakeup <- struct{}{}:
+		default:
+		}
+		if opts.Count > 0 && n+1 == opts.Count {
+			return nil
+		}
+		timer := time.NewTimer(opts.Interval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return nil
 		case <-timer.C:
 		}
 	}
 	return nil
 }
 
-func retryDelay(failures int,min,max time.Duration) time.Duration {
-	delay:=min
-	for n:=1;n<failures;n++ {
-		if delay>=max/2 {delay=max;break}
-		delay*=2
-		if delay>=max {delay=max;break}
+func retryDelay(failures int, min, max time.Duration) time.Duration {
+	delay := min
+	for n := 1; n < failures; n++ {
+		if delay >= max/2 {
+			delay = max
+			break
+		}
+		delay *= 2
+		if delay >= max {
+			delay = max
+			break
+		}
 	}
 	// Jitter in [0.8, 1.0] of the bounded backoff: never exceeds max.
-	return time.Duration(float64(delay)*(0.8+rand.Float64()*0.2))
+	return time.Duration(float64(delay) * (0.8 + rand.Float64()*0.2))
 }
 
 func nonRetryable(err error) bool {
@@ -104,64 +138,78 @@ func nonRetryable(err error) bool {
 	}
 }
 
-func sendLoop(ctx context.Context,sender Sender,q *spool.Queue,logger *slog.Logger,opts ForwardOptions,wakeup <-chan struct{},done <-chan struct{},producerErr *error) error {
+func sendLoop(ctx context.Context, sender Sender, q *spool.Queue, logger *slog.Logger, opts ForwardOptions, wakeup <-chan struct{}, done <-chan struct{}, producerErr *error) error {
 	// Only RAM contains the 'already received' set, because receipt is NOT durable.
-	received:=make(map[string]bool)
-	completed:=false
-	failures:=0
+	received := make(map[string]bool)
+	completed := false
+	failures := 0
 	for {
-		if ctx.Err()!=nil {return nil}
+		if ctx.Err() != nil {
+			return nil
+		}
 		if !completed {
 			select {
 			case <-done:
-				completed=true
-				done=nil
-				if *producerErr!=nil {return *producerErr}
+				completed = true
+				done = nil
+				if *producerErr != nil {
+					return *producerErr
+				}
 			default:
 			}
 		}
 		var next *spool.Record
-		for _,record:=range q.List() {
+		for _, record := range q.List() {
 			if !received[record.MeasurementID] {
-				r:=record
-				next=&r
+				r := record
+				next = &r
 				break
 			}
 		}
-		if next==nil {
-			if completed {return nil}
+		if next == nil {
+			if completed {
+				return nil
+			}
 			select {
-			case <-ctx.Done(): return nil
+			case <-ctx.Done():
+				return nil
 			case <-wakeup:
 			case <-done:
 			}
 			continue
 		}
-		callCtx,cancel:=context.WithTimeout(ctx,opts.RequestTimeout)
-		err:=sender.Send(callCtx,*next)
+		callCtx, cancel := context.WithTimeout(ctx, opts.RequestTimeout)
+		err := sender.Send(callCtx, *next)
 		cancel()
-		if ctx.Err()!=nil {return nil}
-		if err==nil {
-			received[next.MeasurementID]=true
-			failures=0
-			logger.Info("received by server but NOT durably stored","measurement_id",next.MeasurementID)
+		if ctx.Err() != nil {
+			return nil
+		}
+		if err == nil {
+			received[next.MeasurementID] = true
+			failures = 0
+			logger.Info("received by server but NOT durably stored", "measurement_id", next.MeasurementID)
 			continue
 		}
 		if nonRetryable(err) {
-			return fmt.Errorf("non-retryable telemetry error (spool retained): %w",err)
+			return fmt.Errorf("non-retryable telemetry error (spool retained): %w", err)
 		}
 		failures++
-		delay:=retryDelay(failures,opts.RetryMin,opts.RetryMax)
-		logger.Warn("telemetry unavailable; will retry","error",err,"retry_after",delay)
-		timer:=time.NewTimer(delay)
+		delay := retryDelay(failures, opts.RetryMin, opts.RetryMax)
+		logger.Warn("telemetry unavailable; will retry", "error", err, "retry_after", delay)
+		timer := time.NewTimer(delay)
 		select {
-		case <-ctx.Done(): timer.Stop();return nil
+		case <-ctx.Done():
+			timer.Stop()
+			return nil
 		case <-timer.C:
 		case <-done:
 			// Do not mistake collection completion for successful delivery.
-			done=nil
-			completed=true
-			if *producerErr!=nil {timer.Stop();return *producerErr}
+			done = nil
+			completed = true
+			if *producerErr != nil {
+				timer.Stop()
+				return *producerErr
+			}
 			<-timer.C
 		}
 	}
