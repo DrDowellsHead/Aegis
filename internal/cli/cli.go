@@ -60,6 +60,10 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 			return 1
 		}
 		return 0
+	case "receive":
+		return runReceive(ctx, args[1:], errOut)
+	case "send":
+		return runSend(ctx, args[1:], out, errOut)
 	case "collect", "agent":
 		return runMetrics(ctx, args[0], args[1:], out, errOut)
 	case "serve":
@@ -95,5 +99,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|check|collect|agent|version|help> [options]")
 }
