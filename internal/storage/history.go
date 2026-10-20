@@ -15,12 +15,12 @@ import (
 // HistoryQuery uses an exclusive keyset cursor sorted by (started_at, measurement_id).
 // From is inclusive, To exclusive. Limit must be between 1 and 100.
 type HistoryQuery struct {
-	AgentID       string
-	From          time.Time
-	To            time.Time
-	Limit         int
-	CursorTime    time.Time
-	CursorID      string
+	AgentID    string
+	From       time.Time
+	To         time.Time
+	Limit      int
+	CursorTime time.Time
+	CursorID   string
 }
 
 // HistoryItem is a reconstructed, human-readable snapshot.
@@ -64,12 +64,20 @@ func (p *Postgres) ListHistory(ctx context.Context, q HistoryQuery) (HistoryResu
 		return HistoryResult{}, fmt.Errorf("invalid history cursor")
 	}
 	var from, to, cursor any
-	if !q.From.IsZero() { from = q.From }
-	if !q.To.IsZero() { to = q.To }
-	if !q.CursorTime.IsZero() { cursor = q.CursorTime }
+	if !q.From.IsZero() {
+		from = q.From
+	}
+	if !q.To.IsZero() {
+		to = q.To
+	}
+	if !q.CursorTime.IsZero() {
+		cursor = q.CursorTime
+	}
 	rows, err := p.db.QueryContext(ctx, listHistorySQL,
 		q.AgentID, from, to, cursor, q.CursorID, q.Limit+1)
-	if err != nil { return HistoryResult{}, fmt.Errorf("query history: %w", err) }
+	if err != nil {
+		return HistoryResult{}, fmt.Errorf("query history: %w", err)
+	}
 	defer rows.Close()
 	out := HistoryResult{Items: make([]HistoryItem, 0, q.Limit)}
 	for rows.Next() {
@@ -88,7 +96,9 @@ func (p *Postgres) ListHistory(ctx context.Context, q HistoryQuery) (HistoryResu
 			return HistoryResult{}, fmt.Errorf("decode stored protobuf: %w", err)
 		}
 		snapshot, err := decodeHistorySnapshot(&wire)
-		if err != nil { return HistoryResult{}, err }
+		if err != nil {
+			return HistoryResult{}, err
+		}
 		out.Items = append(out.Items, HistoryItem{
 			AgentID: q.AgentID, MeasurementID: id,
 			StartedAt: started.UTC(), ReceivedAt: received.UTC(),
@@ -102,25 +112,33 @@ func (p *Postgres) ListHistory(ctx context.Context, q HistoryQuery) (HistoryResu
 }
 
 func validStoredMeasurementID(id string) bool {
-	if len(id) != 32 { return false }
+	if len(id) != 32 {
+		return false
+	}
 	for _, b := range id {
-		if !(b >= '0' && b <= '9' || b >= 'a' && b <= 'f') { return false }
+		if !(b >= '0' && b <= '9' || b >= 'a' && b <= 'f') {
+			return false
+		}
 	}
 	return true
 }
 
 func decodeHistorySnapshot(s *pb.Snapshot) (metrics.Snapshot, error) {
-	if s == nil || s.StartedAt == nil { return metrics.Snapshot{}, fmt.Errorf("stored measurement has no timestamp") }
+	if s == nil || s.StartedAt == nil {
+		return metrics.Snapshot{}, fmt.Errorf("stored measurement has no timestamp")
+	}
 	if err := s.StartedAt.CheckValid(); err != nil {
 		return metrics.Snapshot{}, fmt.Errorf("stored measurement has invalid timestamp: %w", err)
 	}
 	out := metrics.Snapshot{
 		SchemaVersion: int(s.SchemaVersion),
-		StartedAt: s.StartedAt.AsTime().UTC(),
-		DurationMS: s.DurationMs,
-		OS: s.Os, Arch: s.Arch,
+		StartedAt:     s.StartedAt.AsTime().UTC(),
+		DurationMS:    s.DurationMs,
+		OS:            s.Os, Arch: s.Arch,
 	}
-	if s.Cpu != nil { out.CPU = &metrics.CPU{UsedPercent: s.Cpu.UsedPercent} }
+	if s.Cpu != nil {
+		out.CPU = &metrics.CPU{UsedPercent: s.Cpu.UsedPercent}
+	}
 	if s.Memory != nil {
 		out.Memory = &metrics.Memory{
 			TotalBytes: s.Memory.TotalBytes, AvailableBytes: s.Memory.AvailableBytes,
@@ -137,7 +155,9 @@ func decodeHistorySnapshot(s *pb.Snapshot) (metrics.Snapshot, error) {
 	if s.NetworkAvailable {
 		out.Network = make([]metrics.Interface, 0, len(s.Network))
 		for _, n := range s.Network {
-			if n == nil { return metrics.Snapshot{}, fmt.Errorf("stored network interface is nil") }
+			if n == nil {
+				return metrics.Snapshot{}, fmt.Errorf("stored network interface is nil")
+			}
 			out.Network = append(out.Network, metrics.Interface{
 				Name: n.Name, BytesSent: n.BytesSent, BytesReceived: n.BytesReceived,
 			})
@@ -145,7 +165,9 @@ func decodeHistorySnapshot(s *pb.Snapshot) (metrics.Snapshot, error) {
 	}
 	if len(s.Errors) != 0 {
 		out.Errors = make(map[string]string, len(s.Errors))
-		for k,v := range s.Errors { out.Errors[k] = v }
+		for k, v := range s.Errors {
+			out.Errors[k] = v
+		}
 	}
 	return out, nil
 }

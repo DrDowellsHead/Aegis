@@ -61,7 +61,7 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		}
 		return 0
 	case "history":
-		return runHistory(ctx,args[1:],errOut)
+		return runHistory(ctx, args[1:], errOut)
 	case "migrate":
 		return runMigrate(ctx, args[1:], out, errOut)
 	case "provision":
