@@ -32,14 +32,12 @@ func TestHistoryKeysetAndFilteringPostgres(t *testing.T) {
 	}
 	agent := "123e4567-e89b-42d3-a456-426614174000"
 	start := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
-	ids := make([]string, 0, 3)
 	for i := 0; i < 3; i++ {
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
 			t.Fatal(err)
 		}
 		id := hex.EncodeToString(random[:])
-		ids = append(ids, id)
 		ts := start
 		if i == 2 {
 			ts = ts.Add(time.Hour)
@@ -105,5 +103,4 @@ func TestHistoryKeysetAndFilteringPostgres(t *testing.T) {
 	if err != nil || len(missing.Items) != 0 {
 		t.Fatalf("wrong agent results: %d %v", len(missing.Items), err)
 	}
-	_ = ids
 }

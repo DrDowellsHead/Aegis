@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -172,5 +171,3 @@ func decodeHistorySnapshot(s *pb.Snapshot) (metrics.Snapshot, error) {
 	return out, nil
 }
 
-// Compile-time check of the existing *sql.DB dependency in this package.
-var _ *sql.DB
