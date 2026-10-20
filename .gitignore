@@ -11,3 +11,6 @@ local-*.key
 agent.json
 agents.json
 *.key
+
+# Optional project-local disk spool (prefer user configuration directory)
+.aegis-spool/

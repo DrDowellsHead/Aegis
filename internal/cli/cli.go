@@ -64,6 +64,8 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return runProvision(args[1:], out, errOut)
 	case "cert":
 		return runCert(args[1:], out, errOut)
+	case "forward":
+		return runForward(ctx, args[1:], errOut)
 	case "receive":
 		return runReceive(ctx, args[1:], errOut)
 	case "send":
@@ -103,5 +105,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|provision|cert|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|provision|cert|check|collect|agent|version|help> [options]")
 }
