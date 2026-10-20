@@ -30,7 +30,13 @@ jobs:
         run: test -z "$(gofmt -l cmd internal)"
       - run: go vet ./...
       - run: go test -race -count=1 -timeout=60s ./...
+      - name: Test portable build mode
+        run: go test -count=1 -timeout=60s ./...
+        env:
+          CGO_ENABLED: '0'
       - run: go build -trimpath -o bin/ ./cmd/aegis
+        env:
+          CGO_ENABLED: '0'
       - name: Smoke test
         shell: bash
         run: ./bin/aegis version

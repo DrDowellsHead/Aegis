@@ -1,5 +1,6 @@
 """Build portable release archives with SHA-256 checksums (Python 3, Go required)."""
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -19,6 +20,22 @@ def main():
     output = root / "dist" / version
     # Never mix assets from different invocations or overwrite a release silently.
     output.mkdir(parents=True, exist_ok=False)
+    subprocess.run(["go", "mod", "download", "all"], cwd=root, check=True)
+    module_data = subprocess.check_output(["go", "list", "-m", "-json", "all"], cwd=root, text=True)
+    decoder = json.JSONDecoder()
+    licenses = []
+    while module_data.strip():
+        module, end = decoder.raw_decode(module_data.lstrip())
+        module_data = module_data.lstrip()[end:]
+        if module.get("Main"):
+            continue
+        directory = Path(module["Dir"])
+        files = [p for p in directory.iterdir() if p.is_file() and
+                 p.name.upper().startswith(("LICENSE", "COPYING", "NOTICE"))]
+        if not files:
+            raise RuntimeError(f"No license found for {module['Path']}")
+        folder = module["Path"].replace("/", "_") + "@" + module["Version"]
+        licenses.extend((folder, p) for p in files)
     checksums = []
     for system in ("linux", "darwin", "windows"):
         for arch in ("amd64", "arm64"):
@@ -34,11 +51,17 @@ def main():
                 )
                 shutil.copy2(root / "README.md", stage)
                 shutil.copy2(root / "docs" / "installation.md", stage / "INSTALL.md")
+                shutil.copy2(root / "docs" / "metrics.md", stage / "METRICS.md")
+                for folder, path in licenses:
+                    destination = stage / "THIRD_PARTY_LICENSES" / folder
+                    destination.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(path, destination / path.name)
                 if system == "windows":
                     archive = output / f"{name}.zip"
                     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
-                        for path in sorted(stage.iterdir()):
-                            bundle.write(path, f"{name}/{path.name}")
+                        for path in sorted(stage.rglob("*")):
+                            if path.is_file():
+                                bundle.write(path, f"{name}/{path.relative_to(stage).as_posix()}")
                 else:
                     archive = output / f"{name}.tar.gz"
                     with tarfile.open(archive, "w:gz") as bundle:

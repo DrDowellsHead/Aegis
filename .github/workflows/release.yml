@@ -25,6 +25,10 @@ jobs:
           cache: false
       - run: go vet ./...
       - run: go test -race -count=1 -timeout=60s ./...
+      - name: Test portable build mode
+        run: go test -count=1 -timeout=60s ./...
+        env:
+          CGO_ENABLED: '0'
   draft:
     needs: test
     runs-on: ubuntu-latest
