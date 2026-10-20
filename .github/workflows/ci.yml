@@ -46,7 +46,7 @@ jobs:
           go-version: '1.27.3'
           cache: false
       - run: python3 scripts/package.py dev
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: aegis-development-builds
           path: dist/dev/*
