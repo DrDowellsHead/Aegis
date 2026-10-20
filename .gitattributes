@@ -1,0 +1,6 @@
+# Keep source text identical on all supported operating systems.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary
+*.gz binary
