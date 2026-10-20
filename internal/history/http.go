@@ -80,7 +80,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/api/v1/series" {
-		h.serveSeries(w,r)
+		h.serveSeries(w, r)
 		return
 	}
 	q, err := parseQuery(r)
@@ -264,44 +264,60 @@ func Serve(ctx context.Context, listener net.Listener, handler http.Handler, log
 	}
 }
 
-func (h *Handler) serveSeries(w http.ResponseWriter,r *http.Request) {
-	q,err:=parseSeriesQuery(r)
-	if err!=nil{writeError(w,http.StatusBadRequest,"invalid_query");return}
-	result,err:=h.reader.ListSeries(r.Context(),q)
-	if err!=nil{
-		h.logger.Error("series database query failed","error",err)
-		writeError(w,http.StatusServiceUnavailable,"series_unavailable")
+func (h *Handler) serveSeries(w http.ResponseWriter, r *http.Request) {
+	q, err := parseSeriesQuery(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_query")
 		return
 	}
-	w.Header().Set("Content-Type","application/json; charset=utf-8")
-	if err:=json.NewEncoder(w).Encode(result);err!=nil{
-		h.logger.Error("write series response","error",err)
+	result, err := h.reader.ListSeries(r.Context(), q)
+	if err != nil {
+		h.logger.Error("series database query failed", "error", err)
+		writeError(w, http.StatusServiceUnavailable, "series_unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		h.logger.Error("write series response", "error", err)
 	}
 }
 
 // parseSeriesQuery rejects unknown/duplicate parameters and caps both time
 // range and bucket count so clients cannot request unbounded grouping.
-func parseSeriesQuery(r *http.Request)(storage.SeriesQuery,error){
-	values:=r.URL.Query()
-	for key,parts:=range values {
+func parseSeriesQuery(r *http.Request) (storage.SeriesQuery, error) {
+	values := r.URL.Query()
+	for key, parts := range values {
 		switch key {
-		case "agent_id","from","to","step","disk_path":
-		default:return storage.SeriesQuery{},fmt.Errorf("unknown query parameter")
+		case "agent_id", "from", "to", "step", "disk_path":
+		default:
+			return storage.SeriesQuery{}, fmt.Errorf("unknown query parameter")
 		}
-		if len(parts)!=1{return storage.SeriesQuery{},fmt.Errorf("duplicate query parameter")}
+		if len(parts) != 1 {
+			return storage.SeriesQuery{}, fmt.Errorf("duplicate query parameter")
+		}
 	}
-	agentID:=values.Get("agent_id")
-	if !identity.ValidID(agentID){return storage.SeriesQuery{},fmt.Errorf("invalid agent")}
-	from,err:=time.Parse(time.RFC3339Nano,values.Get("from"))
-	if err!=nil{return storage.SeriesQuery{},fmt.Errorf("invalid from")}
-	to,err:=time.Parse(time.RFC3339Nano,values.Get("to"))
-	if err!=nil{return storage.SeriesQuery{},fmt.Errorf("invalid to")}
-	step,err:=time.ParseDuration(values.Get("step"))
-	if err!=nil||!storage.ValidStep(step){return storage.SeriesQuery{},fmt.Errorf("invalid step")}
-	q:=storage.SeriesQuery{
-		AgentID:agentID,From:from.UTC(),To:to.UTC(),
-		Step:step,DiskPath:values.Get("disk_path"),
+	agentID := values.Get("agent_id")
+	if !identity.ValidID(agentID) {
+		return storage.SeriesQuery{}, fmt.Errorf("invalid agent")
 	}
-	if err:=storage.ValidateSeriesQuery(q);err!=nil{return storage.SeriesQuery{},err}
-	return q,nil
+	from, err := time.Parse(time.RFC3339Nano, values.Get("from"))
+	if err != nil {
+		return storage.SeriesQuery{}, fmt.Errorf("invalid from")
+	}
+	to, err := time.Parse(time.RFC3339Nano, values.Get("to"))
+	if err != nil {
+		return storage.SeriesQuery{}, fmt.Errorf("invalid to")
+	}
+	step, err := time.ParseDuration(values.Get("step"))
+	if err != nil || !storage.ValidStep(step) {
+		return storage.SeriesQuery{}, fmt.Errorf("invalid step")
+	}
+	q := storage.SeriesQuery{
+		AgentID: agentID, From: from.UTC(), To: to.UTC(),
+		Step: step, DiskPath: values.Get("disk_path"),
+	}
+	if err := storage.ValidateSeriesQuery(q); err != nil {
+		return storage.SeriesQuery{}, err
+	}
+	return q, nil
 }

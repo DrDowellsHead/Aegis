@@ -19,11 +19,11 @@ const testAgentID = "123e4567-e89b-42d3-a456-426614174000"
 const operatorToken = "a-very-long-independent-history-token-0123456789"
 
 type fakeReader struct {
-	calls    int
-	last     storage.HistoryQuery
-	returned storage.HistoryResult
-	seriesCalls int
-	lastSeries storage.SeriesQuery
+	calls        int
+	last         storage.HistoryQuery
+	returned     storage.HistoryResult
+	seriesCalls  int
+	lastSeries   storage.SeriesQuery
 	seriesResult storage.SeriesResult
 }
 
@@ -133,34 +133,41 @@ func TestLoopbackOnly(t *testing.T) {
 	}
 }
 
-func(f *fakeReader)ListSeries(_ context.Context,q storage.SeriesQuery)(storage.SeriesResult,error){
+func (f *fakeReader) ListSeries(_ context.Context, q storage.SeriesQuery) (storage.SeriesResult, error) {
 	f.seriesCalls++
-	f.lastSeries=q
-	return f.seriesResult,nil
+	f.lastSeries = q
+	return f.seriesResult, nil
 }
 
-func TestSeriesAPIFiltersAndSecurity(t *testing.T){
-	f:=&fakeReader{seriesResult:storage.SeriesResult{
-		AgentID:testAgentID,Step:"1m0s",Points:[]storage.SeriesPoint{},
+func TestSeriesAPIFiltersAndSecurity(t *testing.T) {
+	f := &fakeReader{seriesResult: storage.SeriesResult{
+		AgentID: testAgentID, Step: "1m0s", Points: []storage.SeriesPoint{},
 	}}
-	h:=testHandler(t,f)
-	base:="/api/v1/series?agent_id="+testAgentID+
+	h := testHandler(t, f)
+	base := "/api/v1/series?agent_id=" + testAgentID +
 		"&from=2026-10-20T12%3A00%3A00Z&to=2026-10-20T12%3A05%3A00Z&step=1m"
-	for _,tc:=range []struct{target,token string;want int}{
-		{base,"",401},
-		{base,"wrong",401},
-		{base+"&step=5m",operatorToken,400},
-		{base+"&step=1s",operatorToken,400},
-		{base+"&to=2026-10-20T23%3A00%3A00Z",operatorToken,400},
-		{base+"&garbage=1",operatorToken,400},
-		{base,operatorToken,200},
-		{base+"&disk_path=%2F",operatorToken,200},
+	for _, tc := range []struct {
+		target, token string
+		want          int
 	}{
-		w:=request(h,tc.target,"GET",tc.token)
-		if w.Code!=tc.want{t.Fatalf("%s got %d want %d: %s",tc.target,w.Code,tc.want,w.Body.String())}
+		{base, "", 401},
+		{base, "wrong", 401},
+		{base + "&step=5m", operatorToken, 400},
+		{base + "&step=1s", operatorToken, 400},
+		{base + "&to=2026-10-20T23%3A00%3A00Z", operatorToken, 400},
+		{base + "&garbage=1", operatorToken, 400},
+		{base, operatorToken, 200},
+		{base + "&disk_path=%2F", operatorToken, 200},
+	} {
+		w := request(h, tc.target, "GET", tc.token)
+		if w.Code != tc.want {
+			t.Fatalf("%s got %d want %d: %s", tc.target, w.Code, tc.want, w.Body.String())
+		}
 	}
-	if f.seriesCalls!=2||f.lastSeries.DiskPath!="/"{
-		t.Fatalf("series args were incorrect: %+v calls %d",f.lastSeries,f.seriesCalls)
+	if f.seriesCalls != 2 || f.lastSeries.DiskPath != "/" {
+		t.Fatalf("series args were incorrect: %+v calls %d", f.lastSeries, f.seriesCalls)
 	}
-	if request(h,base,"POST",operatorToken).Code!=405{t.Fatal("series accepted POST")}
+	if request(h, base, "POST", operatorToken).Code != 405 {
+		t.Fatal("series accepted POST")
+	}
 }

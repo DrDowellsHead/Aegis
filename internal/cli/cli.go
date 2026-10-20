@@ -61,7 +61,7 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		}
 		return 0
 	case "backfill":
-		return runBackfill(ctx,args[1:],out,errOut)
+		return runBackfill(ctx, args[1:], out, errOut)
 	case "history":
 		return runHistory(ctx, args[1:], errOut)
 	case "migrate":

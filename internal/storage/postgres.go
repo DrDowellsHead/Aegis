@@ -135,7 +135,9 @@ func (p *Postgres) Save(ctx context.Context, agentID, measurementID string, snap
 	}
 	digest := sha256.Sum256(wire)
 	cpu, memory, disk, path, err := project(snapshot)
-	if err != nil { return false, fmt.Errorf("project measurement: %w",err) }
+	if err != nil {
+		return false, fmt.Errorf("project measurement: %w", err)
+	}
 	res, err := p.db.ExecContext(ctx, `
 		INSERT INTO aegis_measurements
 			(agent_id, measurement_id, schema_version, started_at, payload, payload_sha256,
