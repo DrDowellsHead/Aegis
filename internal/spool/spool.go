@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -223,4 +222,3 @@ func (q *Queue) Stats() (count int, bytes int64) {
 
 // No Delete or ACK method yet: volatile received=true is NOT durable.
 // The server's durable acknowledgement is introduced in step 3.4.
-var _ io.Reader // keep fsync/rename disk contract explicit in the package

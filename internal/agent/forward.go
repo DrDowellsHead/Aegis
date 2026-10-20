@@ -210,7 +210,12 @@ func sendLoop(ctx context.Context, sender Sender, q *spool.Queue, logger *slog.L
 				timer.Stop()
 				return *producerErr
 			}
-			<-timer.C
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return nil
+			}
 		}
 	}
 }

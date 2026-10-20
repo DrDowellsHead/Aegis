@@ -32,3 +32,5 @@ jobs:
             base64 -w0 "$f"
             printf '\nAEGIS_SPOOL_END:%s\n' "$f"
           done
+
+# Re-check cancellation while backoff timer is active
