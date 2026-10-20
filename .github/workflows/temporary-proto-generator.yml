@@ -1,0 +1,45 @@
+# Temporary bootstrap workflow. Removed after generated code is committed.
+name: Temporary protobuf generator
+on:
+  push:
+    branches: [develop]
+    paths:
+      - api/proto/aegis/telemetry/v1/telemetry.proto
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install generators
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+      - name: Generate Go code
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          bash scripts/generate-proto.sh
+      - name: Resolve dependency lockfiles
+        run: |
+          mkdir -p .temporary-deps
+          printf 'package temporarydeps\nimport (\n _ "google.golang.org/grpc"\n _ "google.golang.org/protobuf/types/known/timestamppb"\n)\n' > .temporary-deps/deps.go
+          go get google.golang.org/grpc@v1.83.2 google.golang.org/protobuf@v1.36.12
+          go mod tidy
+          rm -rf .temporary-deps
+      - name: Export generated files as text
+        run: |
+          for f in internal/telemetry/v1/telemetry.pb.go internal/telemetry/v1/telemetry_grpc.pb.go go.mod go.sum; do
+            printf 'AEGIS_FILE_BEGIN:%s\n' "$f"
+            base64 -w0 "$f"
+            printf '\nAEGIS_FILE_END:%s\n' "$f"
+          done
