@@ -206,3 +206,39 @@ if ($page.has_more) {
 административная аутентификация и политика авторизации.
 
 Подробнее: [ADR 0007](docs/adr/0007-history-api.md).
+
+## Временные ряды и агрегаты для графиков (этап 3.6)
+
+Сначала на сервере выполните миграцию 004 и **возобновляемое заполнение
+проекций старых записей**, иначе графики до обновления схемы будут пустыми:
+
+```powershell
+go run ./cmd/aegis migrate
+go run ./cmd/aegis backfill --batch-size 100
+```
+
+В обоих случаях требуется `AEGIS_DATABASE_URL` с полномочиями на запись.
+Команда backfill поддерживает `--max-records N` для проверки небольшими
+порциями и безопасно повторяется после прерывания.
+
+С уже запущенной командой `aegis history` запросите временной ряд:
+
+```powershell
+$agentId = (Get-Content local-agent.json | ConvertFrom-Json).agent_id
+$headers = @{ Authorization = "Bearer $env:AEGIS_HISTORY_TOKEN" }
+$from = [uri]::EscapeDataString("2026-10-20T12:00:00Z")
+$to = [uri]::EscapeDataString("2026-10-20T13:00:00Z")
+Invoke-RestMethod -Headers $headers -Uri "http://127.0.0.1:8081/api/v1/series?agent_id=$agentId&from=$from&to=$to&step=5m"
+```
+
+`step`: 1m, 5m, 15m, 1h, 6h, 24h; максимум 500 интервалов
+и 90 дней за запрос. Ответ содержит `points`, их время `at`,
+`cpu_avg/min/max`, `memory_avg`, `disk_avg`, а также отдельные счётчики
+измерений. Для диска **обязательно указывайте** `disk_path`, например
+`&disk_path=C%3A%5C` для `C:\\` или `&disk_path=%2F` для `/`.
+Без него `disk_avg` будет `null` — усреднять разные файловые системы нельзя.
+
+Пустые интервалы не заполняются нулями. Пока API доступен только локально.
+
+[ADR 0008 — временные ряды](docs/adr/0008-time-series.md) ·
+[Полный план Aegis](docs/roadmap.md).

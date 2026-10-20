@@ -134,12 +134,16 @@ func (p *Postgres) Save(ctx context.Context, agentID, measurementID string, snap
 		return false, fmt.Errorf("encode measurement: %w", err)
 	}
 	digest := sha256.Sum256(wire)
+	cpu, memory, disk, path, err := project(snapshot)
+	if err != nil { return false, fmt.Errorf("project measurement: %w",err) }
 	res, err := p.db.ExecContext(ctx, `
 		INSERT INTO aegis_measurements
-			(agent_id, measurement_id, schema_version, started_at, payload, payload_sha256)
-		VALUES ($1,$2,$3,$4,$5,$6)
+			(agent_id, measurement_id, schema_version, started_at, payload, payload_sha256,
+			 cpu_used_percent, memory_used_percent, disk_used_percent, disk_path, projected)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE)
 		ON CONFLICT (agent_id,measurement_id) DO NOTHING
-	`, agentID, measurementID, int32(snapshot.SchemaVersion), snapshot.StartedAt.AsTime(), wire, digest[:])
+	`, agentID, measurementID, int32(snapshot.SchemaVersion), snapshot.StartedAt.AsTime(),
+		wire, digest[:], cpu, memory, disk, path)
 	if err != nil {
 		return false, fmt.Errorf("persist measurement: %w", err)
 	}

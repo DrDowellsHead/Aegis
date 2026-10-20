@@ -24,6 +24,7 @@ import (
 
 type Reader interface {
 	ListHistory(context.Context, storage.HistoryQuery) (storage.HistoryResult, error)
+	ListSeries(context.Context, storage.SeriesQuery) (storage.SeriesResult, error)
 }
 
 type Handler struct {
@@ -59,7 +60,7 @@ func NewHandler(reader Reader, operatorToken string, logger *slog.Logger) (*Hand
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if r.URL.Path != "/api/v1/measurements" {
+	if r.URL.Path != "/api/v1/measurements" && r.URL.Path != "/api/v1/series" {
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -76,6 +77,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	digest := sha256.Sum256([]byte(strings.TrimPrefix(auth[0], "Bearer ")))
 	if subtle.ConstantTimeCompare(digest[:], h.tokenDigest[:]) != 1 {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if r.URL.Path == "/api/v1/series" {
+		h.serveSeries(w,r)
 		return
 	}
 	q, err := parseQuery(r)
@@ -257,4 +262,46 @@ func Serve(ctx context.Context, listener net.Listener, handler http.Handler, log
 		}
 		return err
 	}
+}
+
+func (h *Handler) serveSeries(w http.ResponseWriter,r *http.Request) {
+	q,err:=parseSeriesQuery(r)
+	if err!=nil{writeError(w,http.StatusBadRequest,"invalid_query");return}
+	result,err:=h.reader.ListSeries(r.Context(),q)
+	if err!=nil{
+		h.logger.Error("series database query failed","error",err)
+		writeError(w,http.StatusServiceUnavailable,"series_unavailable")
+		return
+	}
+	w.Header().Set("Content-Type","application/json; charset=utf-8")
+	if err:=json.NewEncoder(w).Encode(result);err!=nil{
+		h.logger.Error("write series response","error",err)
+	}
+}
+
+// parseSeriesQuery rejects unknown/duplicate parameters and caps both time
+// range and bucket count so clients cannot request unbounded grouping.
+func parseSeriesQuery(r *http.Request)(storage.SeriesQuery,error){
+	values:=r.URL.Query()
+	for key,parts:=range values {
+		switch key {
+		case "agent_id","from","to","step","disk_path":
+		default:return storage.SeriesQuery{},fmt.Errorf("unknown query parameter")
+		}
+		if len(parts)!=1{return storage.SeriesQuery{},fmt.Errorf("duplicate query parameter")}
+	}
+	agentID:=values.Get("agent_id")
+	if !identity.ValidID(agentID){return storage.SeriesQuery{},fmt.Errorf("invalid agent")}
+	from,err:=time.Parse(time.RFC3339Nano,values.Get("from"))
+	if err!=nil{return storage.SeriesQuery{},fmt.Errorf("invalid from")}
+	to,err:=time.Parse(time.RFC3339Nano,values.Get("to"))
+	if err!=nil{return storage.SeriesQuery{},fmt.Errorf("invalid to")}
+	step,err:=time.ParseDuration(values.Get("step"))
+	if err!=nil||!storage.ValidStep(step){return storage.SeriesQuery{},fmt.Errorf("invalid step")}
+	q:=storage.SeriesQuery{
+		AgentID:agentID,From:from.UTC(),To:to.UTC(),
+		Step:step,DiskPath:values.Get("disk_path"),
+	}
+	if err:=storage.ValidateSeriesQuery(q);err!=nil{return storage.SeriesQuery{},err}
+	return q,nil
 }
