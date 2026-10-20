@@ -25,6 +25,7 @@ import (
 type Reader interface {
 	ListHistory(context.Context, storage.HistoryQuery) (storage.HistoryResult, error)
 	ListSeries(context.Context, storage.SeriesQuery) (storage.SeriesResult, error)
+	ListAgents(context.Context, storage.AgentQuery) (storage.AgentResult, error)
 }
 
 type Handler struct {
@@ -60,7 +61,7 @@ func NewHandler(reader Reader, operatorToken string, logger *slog.Logger) (*Hand
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if r.URL.Path != "/api/v1/measurements" && r.URL.Path != "/api/v1/series" {
+	if r.URL.Path != "/api/v1/measurements" && r.URL.Path != "/api/v1/series" && r.URL.Path != "/api/v1/agents" {
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}
@@ -81,6 +82,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/v1/series" {
 		h.serveSeries(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/agents" {
+		h.serveAgents(w, r)
 		return
 	}
 	q, err := parseQuery(r)
@@ -318,6 +323,55 @@ func parseSeriesQuery(r *http.Request) (storage.SeriesQuery, error) {
 	}
 	if err := storage.ValidateSeriesQuery(q); err != nil {
 		return storage.SeriesQuery{}, err
+	}
+	return q, nil
+}
+
+func (h *Handler) serveAgents(w http.ResponseWriter, r *http.Request) {
+	q, err := parseAgentsQuery(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_query")
+		return
+	}
+	result, err := h.reader.ListAgents(r.Context(), q)
+	if err != nil {
+		h.logger.Error("agent registry query failed", "error", err)
+		writeError(w, http.StatusServiceUnavailable, "agents_unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		h.logger.Error("write agent registry response", "error", err)
+	}
+}
+
+// Cursor is the last UUID in ascending order, independent of wall clock.
+// Statuses are evaluated at DB query time and may change between pages.
+func parseAgentsQuery(r *http.Request) (storage.AgentQuery, error) {
+	values := r.URL.Query()
+	for key, parts := range values {
+		switch key {
+		case "limit", "cursor", "offline_after":
+		default:
+			return storage.AgentQuery{}, fmt.Errorf("unknown agent query parameter")
+		}
+		if len(parts) != 1 {
+			return storage.AgentQuery{}, fmt.Errorf("duplicate agent query parameter")
+		}
+	}
+	q := storage.AgentQuery{Limit: 100, OfflineAfter: time.Minute, Cursor: values.Get("cursor")}
+	if raw := values.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil { return storage.AgentQuery{}, fmt.Errorf("invalid limit") }
+		q.Limit = n
+	}
+	if raw := values.Get("offline_after"); raw != "" {
+		delay, err := time.ParseDuration(raw)
+		if err != nil { return storage.AgentQuery{}, fmt.Errorf("invalid offline_after") }
+		q.OfflineAfter = delay
+	}
+	if err := storage.ValidateAgentQuery(q); err != nil {
+		return storage.AgentQuery{}, err
 	}
 	return q, nil
 }

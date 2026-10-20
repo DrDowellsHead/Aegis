@@ -107,6 +107,12 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "database schema:", err, "(run aegis migrate)")
 		return 2
 	}
+	// Reconcile the authoritative, token-protected JSON registry before
+	// accepting network requests. Never copy token hashes into PostgreSQL.
+	if err := db.SyncAgents(dbCtx, registry.IDs()); err != nil {
+		fmt.Fprintln(errOut, "agent registry synchronization:", err)
+		return 1
+	}
 	listener, err := net.Listen("tcp", *address)
 	if err != nil {
 		fmt.Fprintln(errOut, err)

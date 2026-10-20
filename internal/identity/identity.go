@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -296,4 +297,13 @@ func Provision(registryPath, clientPath string) (string, error) {
 		return "", fmt.Errorf("write client credentials (registry may contain an unused entry): %w", err)
 	}
 	return creds.AgentID, nil
+}
+
+// IDs exposes only provisioned UUIDs, never bearer tokens or token hashes.
+// The result is a sorted copy, safe to pass to the PostgreSQL registry sync.
+func (r Registry) IDs() []string {
+	ids := make([]string, 0, len(r.hashes))
+	for id := range r.hashes { ids = append(ids, id) }
+	slices.Sort(ids)
+	return ids
 }

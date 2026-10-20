@@ -138,7 +138,15 @@ func (p *Postgres) Save(ctx context.Context, agentID, measurementID string, snap
 	if err != nil {
 		return false, fmt.Errorf("project measurement: %w", err)
 	}
-	res, err := p.db.ExecContext(ctx, `
+
+	// The telemetry row and the agent's last authenticated contact MUST
+	// commit together. A lost ACK can be retried with the same ID.
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("begin telemetry transaction: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO aegis_measurements
 			(agent_id, measurement_id, schema_version, started_at, payload, payload_sha256,
 			 cpu_used_percent, memory_used_percent, disk_used_percent, disk_path, projected)
@@ -153,20 +161,42 @@ func (p *Postgres) Save(ctx context.Context, agentID, measurementID string, snap
 	if err != nil {
 		return false, fmt.Errorf("check insert result: %w", err)
 	}
-	if affected == 1 {
-		return false, nil
-	}
-	if affected != 0 {
+	if affected != 0 && affected != 1 {
 		return false, fmt.Errorf("unexpected inserted row count: %d", affected)
 	}
-	var previous []byte
-	if err := p.db.QueryRowContext(ctx,
-		"SELECT payload_sha256 FROM aegis_measurements WHERE agent_id=$1 AND measurement_id=$2",
-		agentID, measurementID).Scan(&previous); err != nil {
-		return false, fmt.Errorf("read existing measurement: %w", err)
+	already := affected == 0
+	if already {
+		var previous []byte
+		if err := tx.QueryRowContext(ctx,
+			"SELECT payload_sha256 FROM aegis_measurements WHERE agent_id=$1 AND measurement_id=$2",
+			agentID, measurementID).Scan(&previous); err != nil {
+			return false, fmt.Errorf("read existing measurement: %w", err)
+		}
+		if subtle.ConstantTimeCompare(previous, digest[:]) != 1 {
+			return false, ErrPayloadMismatch
+		}
 	}
-	if subtle.ConstantTimeCompare(previous, digest[:]) != 1 {
-		return false, ErrPayloadMismatch
+	// Even a valid deduplicated request proves recent authenticated contact.
+	// The agent's sample timestamp is a separate, possibly inaccurate clock.
+	// Historical replays must NOT overwrite OS/architecture from newer samples.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO aegis_agents
+			(agent_id,registered,last_contact_at,last_sample_at,last_os,last_arch)
+		VALUES($1,FALSE,clock_timestamp(),$2,$3,$4)
+		ON CONFLICT (agent_id) DO UPDATE SET
+			last_contact_at=clock_timestamp(),
+			last_os=CASE WHEN EXCLUDED.last_sample_at >=
+				COALESCE(aegis_agents.last_sample_at,'-infinity'::timestamptz)
+				THEN EXCLUDED.last_os ELSE aegis_agents.last_os END,
+			last_arch=CASE WHEN EXCLUDED.last_sample_at >=
+				COALESCE(aegis_agents.last_sample_at,'-infinity'::timestamptz)
+				THEN EXCLUDED.last_arch ELSE aegis_agents.last_arch END,
+			last_sample_at=GREATEST(aegis_agents.last_sample_at,EXCLUDED.last_sample_at)
+	`, agentID, snapshot.StartedAt.AsTime(), snapshot.Os, snapshot.Arch); err != nil {
+		return false, fmt.Errorf("record authenticated agent contact: %w", err)
 	}
-	return true, nil
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit telemetry and agent contact: %w", err)
+	}
+	return already, nil
 }

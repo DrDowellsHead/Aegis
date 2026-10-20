@@ -25,6 +25,9 @@ type fakeReader struct {
 	seriesCalls  int
 	lastSeries   storage.SeriesQuery
 	seriesResult storage.SeriesResult
+	agentsCalls int
+	lastAgents storage.AgentQuery
+	agentsResult storage.AgentResult
 }
 
 func (f *fakeReader) ListHistory(_ context.Context, q storage.HistoryQuery) (storage.HistoryResult, error) {
@@ -169,5 +172,41 @@ func TestSeriesAPIFiltersAndSecurity(t *testing.T) {
 	}
 	if request(h, base, "POST", operatorToken).Code != 405 {
 		t.Fatal("series accepted POST")
+	}
+}
+
+func (f *fakeReader) ListAgents(_ context.Context,q storage.AgentQuery)(storage.AgentResult,error){
+	f.agentsCalls++
+	f.lastAgents=q
+	return f.agentsResult,nil
+}
+
+func TestAgentsAPIAuthorizationAndPaging(t *testing.T){
+	f:=&fakeReader{agentsResult:storage.AgentResult{
+		Items:[]storage.AgentInfo{{AgentID:testAgentID,Status:"unknown"}},
+		HasMore:true,NextCursor:testAgentID,OfflineAfter:"1m0s",
+	}}
+	h:=testHandler(t,f)
+	for _,tc:=range []struct{path,method,token string;status int}{
+		{"/api/v1/agents","GET","",401},
+		{"/api/v1/agents","GET","invalid",401},
+		{"/api/v1/agents","POST",operatorToken,405},
+		{"/api/v1/agents?limit=0","GET",operatorToken,400},
+		{"/api/v1/agents?limit=201","GET",operatorToken,400},
+		{"/api/v1/agents?limit=1&limit=2","GET",operatorToken,400},
+		{"/api/v1/agents?offline_after=1s","GET",operatorToken,400},
+		{"/api/v1/agents?offline_after=25h","GET",operatorToken,400},
+		{"/api/v1/agents?cursor=invalid","GET",operatorToken,400},
+		{"/api/v1/agents?surprise=1","GET",operatorToken,400},
+		{"/api/v1/agents","GET",operatorToken,200},
+		{"/api/v1/agents?limit=1&offline_after=30s&cursor="+testAgentID,"GET",operatorToken,200},
+	}{
+		w:=request(h,tc.path,tc.method,tc.token)
+		if w.Code!=tc.status {t.Errorf("%s %s: got %d want %d: %s",tc.method,tc.path,w.Code,tc.status,w.Body.String())}
+		if w.Header().Get("Cache-Control")!="no-store"{t.Fatal("registry response cacheable")}
+	}
+	if f.agentsCalls!=2||f.lastAgents.Limit!=1||f.lastAgents.OfflineAfter!=30*time.Second||
+		f.lastAgents.Cursor!=testAgentID{
+		t.Fatalf("incorrect registry query: %+v, calls=%d",f.lastAgents,f.agentsCalls)
 	}
 }

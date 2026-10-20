@@ -242,3 +242,37 @@ Invoke-RestMethod -Headers $headers -Uri "http://127.0.0.1:8081/api/v1/series?ag
 
 [ADR 0008 — временные ряды](docs/adr/0008-time-series.md) ·
 [Полный план Aegis](docs/roadmap.md).
+
+## Реестр агентов и оценка состояния (этап 3.7)
+
+Миграция 005 добавляет в PostgreSQL `aegis_agents`, но не переносит туда
+секреты авторизации. Защищённый `agents.json` остаётся единственным
+авторитетным списком разрешённых UUID. При каждом запуске `aegis receive`
+этот список транзакционно синхронизируется с БД до начала приёма gRPC.
+
+После `aegis migrate` **перезапустите** `receive` (с теми же
+`--agents-file`, сертификатами и `AEGIS_DATABASE_URL`). Иначе
+новые зарегистрированные, но ещё не отправлявшие метрики агенты
+не появятся в PostgreSQL. API `history` использует уже существующий
+`AEGIS_HISTORY_TOKEN` и продолжает слушать только 127.0.0.1/::1.
+
+В другом терминале PowerShell с тем же операторским токеном:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:AEGIS_HISTORY_TOKEN" }
+$result = Invoke-RestMethod -Headers $headers -Uri "http://127.0.0.1:8081/api/v1/agents?limit=100&offline_after=1m"
+$result.items | Format-Table agent_id, status, last_contact_at, last_sample_at, os, arch
+```
+
+`online` — сервер получал подтверждённый аутентифицированный запрос
+в течение `offline_after`, `offline` — не получал дольше,
+`unknown` — ещё ни одного подтверждённого контакта. Это **не**
+проверка фактического состояния включения компьютера. Время последнего
+контакта задаёт PostgreSQL, а не агент; время последнего измерения
+берётся из сообщения агента и может быть старым из-за накопленной очереди.
+
+Запрос поддерживает `limit=1..200`, `cursor=UUID` и
+`offline_after` (10s..24h). Если `has_more` — true, передайте
+`next_cursor` в следующем запросе. Секреты никогда не возвращаются.
+
+Подробнее: [ADR 0009](docs/adr/0009-agent-registry.md).
