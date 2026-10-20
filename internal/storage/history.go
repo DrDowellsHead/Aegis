@@ -170,4 +170,3 @@ func decodeHistorySnapshot(s *pb.Snapshot) (metrics.Snapshot, error) {
 	}
 	return out, nil
 }
-
