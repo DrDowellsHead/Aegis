@@ -20,3 +20,23 @@ Aegis — учебно-практическая платформа монито�
 
 Архитектура: [ADR 0001](docs/adr/0001-foundation.md).
 Рабочий процесс: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Реализовано: первый рабочий этап
+
+- `aegis version` — версия исполняемого файла.
+- `aegis serve` — локальный HTTP-сервер, `/healthz`, JSON-журналы,
+  завершение по Ctrl+C/SIGTERM с ограниченным временем ожидания.
+- `aegis check --url http://127.0.0.1:8080/healthz` — однократная
+  HTTP-проверка с таймаутом, JSON-результатом и кодом завершения.
+- CI: тесты с обнаружением гонок на Windows/macOS/Linux; сборка шести архивов.
+- Процесс подготовки черновика релиза по тегу из истории main.
+
+[Установка и запуск](docs/installation.md) · [Как выпускать релизы](docs/releases.md)
+
+```sh
+go run ./cmd/aegis serve
+# В другом терминале:
+go run ./cmd/aegis check --url http://127.0.0.1:8080/healthz
+```
+
+Сбор системных метрик, gRPC, PostgreSQL и уведомления пока не реализованы.
