@@ -77,8 +77,8 @@ go run ./cmd/aegis receive --listen 127.0.0.1:9090 --tls-cert local-server.crt -
 go run ./cmd/aegis send --server 127.0.0.1:9090 --credentials local-agent.json --ca-cert local-ca.crt --disk .
 ```
 
-Ожидаемый ответ включает `"received": true`, `"durable": false` и
-уникальный `measurement_id`. **Данные не сохраняются** при перезапуске сервера.
+Ожидаемый ответ включает `"received": true`, `"durable": true` и
+уникальный `measurement_id`. Данные сохраняются в PostgreSQL.
 Команды `collect` и `agent` по-прежнему работают локально, без подключения.
 
 Для нескольких компьютеров копируйте ТОЛЬКО соответствующий закрытый
@@ -113,12 +113,45 @@ go run ./cmd/aegis forward --server 127.0.0.1:9090 --credentials local-agent.jso
 пользователя, отдельно для каждого UUID агента. Для демонстрации можно указать
 `--count 3`, чтобы собрать три измерения и попытаться отправить все три.
 
-**Важно:** сервер всё ещё не сохраняет измерения. Успешный ответ `received=true`
-лишь подавляет повторную отправку в текущем процессе, НЕ удаляет локальную
-запись. После перезапуска агента очередь целиком отправляется снова.
-Она растёт даже при рабочем сервере и неизбежно заполнится — это временное
-ограничение, снимаемое только после внедрения durable ACK и серверного хранения.
+**Важно:** теперь только `durable=true` после записи в PostgreSQL разрешает
+удалить подтверждённую запись из локальной очереди. Потерянное подтверждение
+вызывает повтор с тем же ID; сервер не создаёт дубликат.
 При переполнении агент сообщает об ошибке и останавливает сбор; старые записи
 не стираются. Не запускайте два процесса с одной очередью одновременно.
 
 [ADR 0005: дисковая очередь, повторные попытки и ограничения](docs/adr/0005-disk-queue-and-retry.md).
+
+## PostgreSQL: миграции и устойчивое подтверждение (этап 3.4)
+
+Для локального ознакомления нужен PostgreSQL 17+ (проверяем CI на 17).
+Например, с Docker (пароль исключительно демонстрационный):
+
+```sh
+docker run --name aegis-postgres -d -e POSTGRES_USER=aegis -e POSTGRES_PASSWORD=dev-only-change-this -e POSTGRES_DB=aegis -p 127.0.0.1:5432:5432 -v aegis-pgdata:/var/lib/postgresql/data postgres:17
+```
+
+В Windows PowerShell укажите строку подключения через переменную окружения
+терминала (не храните реальный пароль в git):
+
+```powershell
+$env:AEGIS_DATABASE_URL = "postgres://aegis:dev-only-change-this@127.0.0.1:5432/aegis?sslmode=disable"
+go run ./cmd/aegis migrate
+go run ./cmd/aegis receive --listen 127.0.0.1:9090 --tls-cert local-server.crt --tls-key local-server.key --agents-file local-agents.json
+```
+
+`sslmode=disable` допускается только для локального демонстрационного PostgreSQL
+на loopback. К удалённой базе нужно подключаться по TLS с проверкой сервера.
+На машине агента PostgreSQL не требуется. Отдельная команда `forward`
+сохраняет измерения на диск, отправляет их и удаляет **только после**
+подтверждения фиксации в PostgreSQL. Миграции выполняются вручную;
+при старте `receive` проверяет наличие схемы и настройки записи.
+
+В PostgreSQL метрики сохраняются как protobuf BYTEA, а первичный ключ
+`(agent_id, measurement_id)` защищает от дубликатов.
+Узнать число измерений можно SQL-запросом:
+
+```sql
+SELECT agent_id, count(*) FROM aegis_measurements GROUP BY agent_id;
+```
+
+Полное описание: [ADR 0006](docs/adr/0006-postgresql-durable-ack.md).

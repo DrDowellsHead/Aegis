@@ -98,7 +98,7 @@ func runForward(ctx context.Context, args []string, errOut io.Writer) int {
 	defer client.Close()
 	logger := slog.New(slog.NewJSONHandler(errOut, nil))
 	n, bytes := queue.Stats()
-	logger.Info("forwarder started; receipt is NOT durable",
+	logger.Info("forwarder started; records removed only on durable ACK",
 		"agent_id", creds.AgentID, "queue_entries", n, "queue_bytes", bytes,
 		"queue_dir", *queueDir, "server", *address)
 	err = agent.Forward(ctx, collector, secureSender{client: client, agentID: creds.AgentID},
@@ -111,7 +111,7 @@ func runForward(ctx context.Context, args []string, errOut io.Writer) int {
 		return 1
 	}
 	n, bytes = queue.Stats()
-	logger.Info("forwarder stopped; data remains on disk pending durable ACK",
+	logger.Info("forwarder stopped; remaining records have no durable ACK",
 		"queue_entries", n, "queue_bytes", bytes)
 	return 0
 }

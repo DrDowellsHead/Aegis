@@ -9,10 +9,12 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/identity"
 	"github.com/DrDowellsHead/Aegis/internal/metrics"
+	"github.com/DrDowellsHead/Aegis/internal/storage"
 	"github.com/DrDowellsHead/Aegis/internal/telemetry"
 )
 
@@ -93,13 +95,25 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 		fmt.Fprintln(errOut, err)
 		return 2
 	}
+	dbCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	db, err := storage.Open(dbCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	if err != nil {
+		fmt.Fprintln(errOut, "database:", err)
+		return 2
+	}
+	defer db.Close()
+	if err := db.Ready(dbCtx); err != nil {
+		fmt.Fprintln(errOut, "database schema:", err, "(run aegis migrate)")
+		return 2
+	}
 	listener, err := net.Listen("tcp", *address)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
 	logger := slog.New(slog.NewJSONHandler(errOut, nil))
-	if err := telemetry.ServeReceiver(ctx, listener, logger, transport, registry); err != nil {
+	if err := telemetry.ServeReceiver(ctx, listener, logger, transport, registry, db); err != nil {
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
@@ -157,7 +171,7 @@ func runSend(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	if err := json.NewEncoder(out).Encode(map[string]any{
-		"received": true, "durable": false, "measurement_id": id,
+		"received": true, "durable": true, "measurement_id": id,
 	}); err != nil {
 		fmt.Fprintln(errOut, err)
 		return 1

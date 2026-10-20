@@ -61,14 +61,14 @@ func TestReceiveAuth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	receiver := &Receiver{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), registry: registry}
+	receiver := &Receiver{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), registry: registry, store: successStore{}}
 	wire, _ := EncodeSnapshot(sample())
-	req := &pb.SendRequest{AgentId: agent.AgentID, MeasurementId: "m", Snapshot: wire}
+	req := &pb.SendRequest{AgentId: agent.AgentID, MeasurementId: "0123456789abcdef0123456789abcdef", Snapshot: wire}
 	if _, err := receiver.Send(context.Background(), req); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("missing token was accepted: %v", err)
 	}
 	validCtx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+agent.Token))
-	if _, err := receiver.Send(validCtx, &pb.SendRequest{AgentId: agent.AgentID, MeasurementId: "m"}); status.Code(err) != codes.InvalidArgument {
+	if _, err := receiver.Send(validCtx, &pb.SendRequest{AgentId: agent.AgentID, MeasurementId: "0123456789abcdef0123456789abcdef"}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("invalid payload accepted: %v", err)
 	}
 	resp, err := receiver.Send(validCtx, req)
@@ -112,7 +112,7 @@ func TestTLSGRPCAndInvalidTrust(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeReceiver(ctx, listener, slog.New(slog.NewTextHandler(io.Discard, nil)), transport, registry)
+		done <- ServeReceiver(ctx, listener, slog.New(slog.NewTextHandler(io.Discard, nil)), transport, registry, successStore{})
 	}()
 	address := listener.Addr().String()
 	if _, err := SendOnce(context.Background(), address, agent, ca, sample()); err != nil {
@@ -138,7 +138,7 @@ func TestTLSGRPCAndInvalidTrust(t *testing.T) {
 	bounded, cancelCall := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelCall()
 	wire, _ := EncodeSnapshot(sample())
-	if _, err := pb.NewTelemetryServiceClient(unprotected).Send(bounded, &pb.SendRequest{AgentId: agent.AgentID, MeasurementId: "m", Snapshot: wire}); err == nil {
+	if _, err := pb.NewTelemetryServiceClient(unprotected).Send(bounded, &pb.SendRequest{AgentId: agent.AgentID, MeasurementId: "0123456789abcdef0123456789abcdef", Snapshot: wire}); err == nil {
 		t.Fatal("plaintext call was accepted")
 	}
 	cancel()
@@ -151,3 +151,6 @@ func TestTLSGRPCAndInvalidTrust(t *testing.T) {
 		t.Fatal("gRPC server did not stop")
 	}
 }
+
+type successStore struct{}
+func(successStore)Save(context.Context,string,string,*pb.Snapshot)(bool,error){return false,nil}

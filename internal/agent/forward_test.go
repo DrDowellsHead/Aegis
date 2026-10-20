@@ -61,25 +61,24 @@ func TestRetriesSameMeasurementAndRecoversAfterRestart(t *testing.T) {
 		t.Fatalf("retry IDs changed: %v", sender.ids)
 	}
 	n, _ := q.Stats()
-	if n != 1 {
-		t.Fatalf("volatile ACK erased queue: %d", n)
+	if n != 0 {
+		t.Fatalf("durably acknowledged record remains queued: %d", n)
 	}
 	restarted, err := spool.Open(path, agentID, spool.MaxRecordBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// No new collection needed to deliver old pending record. A single new
-	// sample is added in this finite demonstration, and both are sent.
+	// Start again after the acknowledged sample was removed.
 	resumed := &failThenSend{}
 	if err := Forward(ctx, source, resumed, restarted, log, testOptions(1)); err != nil {
 		t.Fatal(err)
 	}
-	if len(resumed.ids) != 2 || resumed.ids[0] != sender.ids[0] {
-		t.Fatalf("restart did not replay old record first: %v", resumed.ids)
+	if len(resumed.ids) != 1 || resumed.ids[0] == sender.ids[0] {
+		t.Fatalf("acknowledged record unexpectedly replayed: %v", resumed.ids)
 	}
 	n, _ = restarted.Stats()
-	if n != 2 {
-		t.Fatalf("volatile receipt removed record: %d", n)
+	if n != 0 {
+		t.Fatalf("durable ACK did not remove new record: %d", n)
 	}
 }
 func TestAuthenticationErrorIsNotRetried(t *testing.T) {

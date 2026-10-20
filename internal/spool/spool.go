@@ -1,5 +1,5 @@
 // Package spool provides a bounded, restartable on-disk outbox.
-// Records are NEVER removed on a volatile server receipt.
+// Records are removed only after a durable database acknowledgement.
 package spool
 
 import (
@@ -220,5 +220,35 @@ func (q *Queue) Stats() (count int, bytes int64) {
 	return len(q.entries), q.used
 }
 
-// No Delete or ACK method yet: volatile received=true is NOT durable.
-// The server's durable acknowledgement is introduced in step 3.4.
+// Peek returns the oldest queued record without materializing the whole queue.
+func (q *Queue) Peek() (Record, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	var first string
+	for name := range q.entries {
+		if first == "" || name < first { first = name }
+	}
+	if first == "" { return Record{}, false }
+	return q.entries[first].record, true
+}
+
+// Ack removes an entry only after the caller has verified a durable server ACK.
+// If removal fails, it remains queued and will safely be retried.
+func (q *Queue) Ack(measurementID string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for name, item := range q.entries {
+		if item.record.MeasurementID != measurementID { continue }
+		if err := os.Remove(filepath.Join(q.dir,name)); err != nil {
+			return fmt.Errorf("remove durably acknowledged record: %w",err)
+		}
+		delete(q.entries,name)
+		q.used -= item.size
+		if directory,err := os.Open(q.dir); err == nil {
+			_ = directory.Sync() // best effort; replay after crash is safe
+			_ = directory.Close()
+		}
+		return nil
+	}
+	return fmt.Errorf("measurement ID %s not found in spool",measurementID)
+}

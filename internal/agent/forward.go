@@ -36,8 +36,8 @@ func (o ForwardOptions) validate() error {
 }
 
 // Forward runs exactly one collector goroutine and one sender loop.
-// A volatile 'received' reply suppresses resending during THIS process lifetime,
-// but does not erase the disk record. Restart replays all records.
+// Only an authenticated server's durable database ACK removes an outbox entry.
+// If an ACK is lost, replay is safe because the DB deduplicates by stable ID.
 func Forward(parent context.Context, source Source, sender Sender, q *spool.Queue, logger *slog.Logger, opts ForwardOptions) error {
 	if source == nil || sender == nil || q == nil || logger == nil {
 		return fmt.Errorf("forward dependencies are required")
@@ -139,8 +139,6 @@ func nonRetryable(err error) bool {
 }
 
 func sendLoop(ctx context.Context, sender Sender, q *spool.Queue, logger *slog.Logger, opts ForwardOptions, wakeup <-chan struct{}, done <-chan struct{}, producerErr *error) error {
-	// Only RAM contains the 'already received' set, because receipt is NOT durable.
-	received := make(map[string]bool)
 	completed := false
 	failures := 0
 	for {
@@ -158,15 +156,8 @@ func sendLoop(ctx context.Context, sender Sender, q *spool.Queue, logger *slog.L
 			default:
 			}
 		}
-		var next *spool.Record
-		for _, record := range q.List() {
-			if !received[record.MeasurementID] {
-				r := record
-				next = &r
-				break
-			}
-		}
-		if next == nil {
+		next, hasNext := q.Peek()
+		if !hasNext {
 			if completed {
 				return nil
 			}
@@ -179,15 +170,17 @@ func sendLoop(ctx context.Context, sender Sender, q *spool.Queue, logger *slog.L
 			continue
 		}
 		callCtx, cancel := context.WithTimeout(ctx, opts.RequestTimeout)
-		err := sender.Send(callCtx, *next)
+		err := sender.Send(callCtx, next)
 		cancel()
 		if ctx.Err() != nil {
 			return nil
 		}
 		if err == nil {
-			received[next.MeasurementID] = true
+			if err := q.Ack(next.MeasurementID); err != nil {
+				return fmt.Errorf("durably stored remotely, but local spool removal failed: %w", err)
+			}
 			failures = 0
-			logger.Info("received by server but NOT durably stored", "measurement_id", next.MeasurementID)
+			logger.Info("durably stored; local record removed", "measurement_id", next.MeasurementID)
 			continue
 		}
 		if nonRetryable(err) {
