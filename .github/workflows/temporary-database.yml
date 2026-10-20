@@ -1,4 +1,4 @@
-name: Temporary database bootstrap
+name: Temporary PostgreSQL verification
 on:
   push:
     branches: [develop]
@@ -6,8 +6,24 @@ on:
 permissions:
   contents: read
 jobs:
-  bootstrap:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: aegis_test
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: aegis_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aegis_test -d aegis_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AEGIS_TEST_DATABASE_URL: postgres://aegis_test:ci-test-only@127.0.0.1:5432/aegis_test?sslmode=disable
     steps:
       - uses: actions/checkout@v6
         with:
@@ -16,20 +32,25 @@ jobs:
         with:
           go-version: '1.27.3'
           cache: false
-      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - name: Install generators
+      - name: Prepare protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Regenerate protobuf and normalize source
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
-      - name: Regenerate protobuf and add PostgreSQL driver
-        run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           bash scripts/generate-proto.sh
           go get github.com/jackc/pgx/v5@v5.7.6
           go mod tidy
-      - name: Export generated code and lockfiles
+          gofmt -w internal/storage/*.go internal/spool/*.go internal/agent/*.go internal/telemetry/*.go internal/cli/*.go
+      - name: Unit and PostgreSQL integration tests
+        run: go test -race -count=1 -timeout=90s ./...
+      - name: Static checks
+        run: go vet ./...
+      - name: Export all normalized sources and dependencies
+        if: always()
         run: |
-          for f in internal/telemetry/v1/telemetry.pb.go internal/telemetry/v1/telemetry_grpc.pb.go go.mod go.sum; do
+          for f in internal/telemetry/v1/telemetry.pb.go internal/telemetry/v1/telemetry_grpc.pb.go go.mod go.sum internal/storage/postgres.go internal/storage/ready.go internal/storage/postgres_test.go internal/spool/spool.go internal/spool/spool_test.go internal/agent/forward.go internal/agent/forward_test.go internal/telemetry/receiver.go internal/telemetry/sender.go internal/telemetry/telemetry_test.go internal/telemetry/pg_integration_test.go internal/cli/telemetry.go internal/cli/migrate.go internal/cli/cli.go internal/cli/forward.go internal/cli/security_test.go; do
             echo "BEGIN_AEGIS34:$f"
             base64 -w0 "$f"
             echo
