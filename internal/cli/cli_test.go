@@ -29,3 +29,12 @@ func TestCommands(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckValidation(t *testing.T) {
+	for _, args := range [][]string{{"check"}, {"check", "--url", "ftp://host"}, {"check", "--url", "http://host", "--timeout", "0s"}, {"check", "extra"}} {
+		var out, errOut bytes.Buffer
+		if code := Run(context.Background(), args, &out, &errOut, "test"); code != 2 {
+			t.Fatalf("%v: code %d", args, code)
+		}
+	}
+}

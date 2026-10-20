@@ -3,12 +3,15 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"time"
 
+	"github.com/DrDowellsHead/Aegis/internal/probe"
 	"github.com/DrDowellsHead/Aegis/internal/server"
 )
 
@@ -28,6 +31,34 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 			return 2
 		}
 		fmt.Fprintln(out, "aegis", version)
+		return 0
+	case "check":
+		flags := flag.NewFlagSet("check", flag.ContinueOnError)
+		flags.SetOutput(errOut)
+		target := flags.String("url", "", "HTTP(S) URL to check")
+		timeout := flags.Duration("timeout", 5*time.Second, "request deadline (maximum 1m)")
+		if err := flags.Parse(args[1:]); err != nil {
+			if err == flag.ErrHelp {
+				return 0
+			}
+			return 2
+		}
+		if flags.NArg() != 0 {
+			fmt.Fprintln(errOut, "unexpected positional arguments")
+			return 2
+		}
+		result, err := probe.HTTP(ctx, *target, *timeout)
+		if err != nil {
+			fmt.Fprintln(errOut, err)
+			return 2
+		}
+		if err := json.NewEncoder(out).Encode(result); err != nil {
+			fmt.Fprintln(errOut, "write result:", err)
+			return 1
+		}
+		if !result.Healthy {
+			return 1
+		}
 		return 0
 	case "serve":
 		flags := flag.NewFlagSet("serve", flag.ContinueOnError)
@@ -62,5 +93,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|check|version|help> [options]")
 }
