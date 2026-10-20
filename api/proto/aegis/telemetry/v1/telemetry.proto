@@ -7,7 +7,7 @@ option go_package = "github.com/DrDowellsHead/Aegis/internal/telemetry/v1;teleme
 import "google/protobuf/timestamp.proto";
 
 // TelemetryService is a deliberately small unary ingestion API.
-// A successful RPC means received and validated, NOT durably stored.
+// A durable acknowledgement is sent only after the database commit.
 service TelemetryService {
   rpc Send(SendRequest) returns (SendResponse);
 }
@@ -21,8 +21,11 @@ message SendRequest {
 }
 
 message SendResponse {
-  // Only volatile validation/receipt. Never a durable queue ACK.
+  // Older servers only send received; clients MUST NOT delete data on it.
   bool received = 1;
+  // Server confirms successful durable storage (including a stored duplicate).
+  bool durable = 2;
+  bool already_stored = 3;
 }
 
 message Snapshot {
