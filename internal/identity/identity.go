@@ -303,7 +303,9 @@ func Provision(registryPath, clientPath string) (string, error) {
 // The result is a sorted copy, safe to pass to the PostgreSQL registry sync.
 func (r Registry) IDs() []string {
 	ids := make([]string, 0, len(r.hashes))
-	for id := range r.hashes { ids = append(ids, id) }
+	for id := range r.hashes {
+		ids = append(ids, id)
+	}
 	slices.Sort(ids)
 	return ids
 }

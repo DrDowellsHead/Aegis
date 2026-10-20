@@ -362,12 +362,16 @@ func parseAgentsQuery(r *http.Request) (storage.AgentQuery, error) {
 	q := storage.AgentQuery{Limit: 100, OfflineAfter: time.Minute, Cursor: values.Get("cursor")}
 	if raw := values.Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
-		if err != nil { return storage.AgentQuery{}, fmt.Errorf("invalid limit") }
+		if err != nil {
+			return storage.AgentQuery{}, fmt.Errorf("invalid limit")
+		}
 		q.Limit = n
 	}
 	if raw := values.Get("offline_after"); raw != "" {
 		delay, err := time.ParseDuration(raw)
-		if err != nil { return storage.AgentQuery{}, fmt.Errorf("invalid offline_after") }
+		if err != nil {
+			return storage.AgentQuery{}, fmt.Errorf("invalid offline_after")
+		}
 		q.OfflineAfter = delay
 	}
 	if err := storage.ValidateAgentQuery(q); err != nil {
