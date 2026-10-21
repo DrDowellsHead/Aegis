@@ -72,6 +72,8 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return runRetention(ctx, args[1:], out, errOut)
 	case "backfill":
 		return runBackfill(ctx, args[1:], out, errOut)
+	case "dashboard-user":
+		return runDashboardUser(args[1:], out, errOut)
 	case "dashboard":
 		return runDashboard(ctx, args[1:], errOut)
 	case "history":
@@ -123,5 +125,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|dashboard|history|config|doctor|audit|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
 }
