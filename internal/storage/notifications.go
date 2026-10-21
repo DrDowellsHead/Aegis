@@ -188,6 +188,9 @@ func (p *Postgres) ClaimNotification(ctx context.Context, channels []string) (*N
 	`, set).Scan(&job.ID, &job.EventID, &job.Channel, &job.Target, &job.Attempt,
 		&job.LeaseToken, &job.IncidentID, &job.Action, &job.Kind, &job.Title, &job.AgentID, &job.Severity)
 	if errors.Is(err, sql.ErrNoRows) {
+		// Commit any expired eighth-attempt leases reaped above even when
+		// no new job is due. Returning before commit would roll them back.
+		if err = tx.Commit(); err != nil {return nil,err}
 		return nil, nil
 	}
 	if err != nil {
