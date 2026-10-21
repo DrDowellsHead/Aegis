@@ -91,7 +91,9 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
         state: name.endsWith('acknowledge') ? 'acknowledged' : 'resolved',
         opened_at: '2026-10-21T10:00:00Z',
         acknowledged_at: null, acknowledged_by: null,
-        resolved_at: null, resolution: null
+        resolved_at: null, resolution: null,
+        severity: 'warning', escalated_at: null,
+        suppressed_checks: 0, last_suppressed_at: null
       }); return
     }
     if (name === '/api/web/rules') {
