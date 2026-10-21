@@ -1,0 +1,21 @@
+name: Format incident regression (temporary)
+on:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/format-incident-regression.yml]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+      - run: |
+          gofmt -w internal/storage/incident_policy_test.go internal/storage/rules.go
+          git add internal/storage/incident_policy_test.go internal/storage/rules.go
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Format stale data incident regression test"
+            git push origin HEAD:develop
+          fi
