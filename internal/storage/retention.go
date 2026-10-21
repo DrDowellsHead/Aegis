@@ -112,43 +112,54 @@ func (p *Postgres) Preview(ctx context.Context, f RetentionFilter) (RetentionPre
 	return result, nil
 }
 
-// DeleteExpiredBatch deletes at most batchSize records, atomically.
-// Each SQL statement commits before a successful response. The stable cutoff
-// must be obtained from Preview and NOT recomputed between batches.
-// FOR UPDATE SKIP LOCKED lets separate worker transactions proceed safely.
+// DeleteExpiredBatch safely processes one transaction without operator audit.
 func (p *Postgres) DeleteExpiredBatch(ctx context.Context, cutoff time.Time, agentID string, batchSize int) (int64, error) {
-	if p == nil || p.db == nil {
-		return 0, fmt.Errorf("database unavailable")
-	}
-	if cutoff.IsZero() || batchSize < 1 || batchSize > MaxRetentionBatch ||
-		(agentID != "" && !identity.ValidID(agentID)) {
-		return 0, fmt.Errorf("invalid retention cutoff, batch size, or agent ID")
-	}
-	var deleted int64
-	err := p.db.QueryRowContext(ctx, `
-		WITH candidates AS (
-			SELECT agent_id, measurement_id FROM aegis_measurements
-			WHERE received_at < $1
-			  AND ($2::uuid IS NULL OR agent_id=$2::uuid)
-			ORDER BY received_at,agent_id,measurement_id
-			LIMIT $3
-			FOR UPDATE SKIP LOCKED
-		), deleted AS (
-			DELETE FROM aegis_measurements m USING candidates c
-			WHERE m.agent_id=c.agent_id AND m.measurement_id=c.measurement_id
-			RETURNING 1
-		)
-		SELECT count(*) FROM deleted
-	`, cutoff, agentArgument(agentID), batchSize).Scan(&deleted)
-	if err != nil {
-		return 0, fmt.Errorf("delete expired measurements: %w", err)
-	}
-	return deleted, nil
+    return p.deleteExpiredBatch(ctx,cutoff,agentID,batchSize,"")
+}
+
+// deleteExpiredBatch updates audit progress within the SAME transaction as
+// DELETE. Neither the progress counter nor the deletion can commit alone.
+func(p *Postgres)deleteExpiredBatch(ctx context.Context,cutoff time.Time,agentID string,batchSize int,auditID string)(int64,error){
+    if p==nil||p.db==nil{return 0,fmt.Errorf("database unavailable")}
+    if cutoff.IsZero()||batchSize<1||batchSize>MaxRetentionBatch||
+       (agentID!=""&&!identity.ValidID(agentID)) {return 0,fmt.Errorf("invalid retention cutoff, batch size or agent")}
+    tx,err:=p.db.BeginTx(ctx,nil)
+    if err!=nil{return 0,fmt.Errorf("begin retention transaction: %w",err)}
+    defer tx.Rollback()
+    var deleted int64
+    err=tx.QueryRowContext(ctx,`
+        WITH candidates AS (
+            SELECT agent_id, measurement_id FROM aegis_measurements
+            WHERE received_at < $1
+              AND ($2::uuid IS NULL OR agent_id=$2::uuid)
+            ORDER BY received_at,agent_id,measurement_id
+            LIMIT $3 FOR UPDATE SKIP LOCKED
+        ), deleted AS (
+            DELETE FROM aegis_measurements m USING candidates c
+            WHERE m.agent_id=c.agent_id AND m.measurement_id=c.measurement_id
+            RETURNING 1
+        )
+        SELECT count(*) FROM deleted
+    `,cutoff,agentArgument(agentID),batchSize).Scan(&deleted)
+    if err!=nil{return 0,fmt.Errorf("delete expired measurements: %w",err)}
+    if err:=advanceAudit(ctx,tx,auditID,deleted);err!=nil{return 0,err}
+    if err:=tx.Commit();err!=nil{return 0,fmt.Errorf("commit audited retention: %w",err)}
+    return deleted,nil
 }
 
 // Purge is explicitly bounded. A nonzero error reports how many earlier
 // batches already committed; operators can safely resume the same policy.
 func (p *Postgres) Purge(ctx context.Context, preview RetentionPreview, batchSize, maxDelete int) (int64, error) {
+    return p.purge(ctx,preview,batchSize,maxDelete,"")
+}
+
+// PurgeAudited records per-batch progress durably with each DELETE.
+func(p *Postgres)PurgeAudited(ctx context.Context,preview RetentionPreview,batchSize,maxDelete int,auditID string)(int64,error){
+    if !validStoredAgentID(auditID){return 0,fmt.Errorf("invalid audit ID")}
+    return p.purge(ctx,preview,batchSize,maxDelete,auditID)
+}
+
+func(p *Postgres)purge(ctx context.Context,preview RetentionPreview,batchSize,maxDelete int,auditID string)(int64,error){
 	if err := (RetentionFilter{Days: preview.RetentionDays, AgentID: preview.AgentID}).Validate(); err != nil {
 		return 0, err
 	}
@@ -167,7 +178,7 @@ func (p *Postgres) Purge(ctx context.Context, preview RetentionPreview, batchSiz
 		if remain := int64(maxDelete) - total; remain < int64(n) {
 			n = int(remain)
 		}
-		deleted, err := p.DeleteExpiredBatch(ctx, preview.Cutoff, preview.AgentID, n)
+		deleted, err := p.deleteExpiredBatch(ctx, preview.Cutoff, preview.AgentID, n, auditID)
 		if err != nil {
 			return total, err
 		}

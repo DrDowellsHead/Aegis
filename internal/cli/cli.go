@@ -60,7 +60,13 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 			return 1
 		}
 		return 0
-	case "storage":
+	case "config":
+        return runAdminConfig(args[1:],out,errOut)
+    case "doctor":
+        return runDoctor(ctx,args[1:],out,errOut)
+    case "audit":
+        return runAudit(ctx,args[1:],out,errOut)
+    case "storage":
 		return runStorage(ctx, args[1:], out, errOut)
 	case "retention":
 		return runRetention(ctx, args[1:], out, errOut)
@@ -115,5 +121,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|history|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|history|config|doctor|audit|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
 }

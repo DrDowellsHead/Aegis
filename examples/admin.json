@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "retention_days": 30,
+  "retention_batch": 500,
+  "retention_max_delete": 10000,
+  "backfill_batch": 100
+}
