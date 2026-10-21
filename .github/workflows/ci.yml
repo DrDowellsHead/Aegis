@@ -27,7 +27,9 @@ jobs:
           cache: false
       - name: Check formatting
         shell: bash
-        run: test -z "$(gofmt -l cmd internal)"
+        run: |
+          gofmt -d cmd internal
+          test -z "$(gofmt -l cmd internal)"
       - run: go vet ./...
       - run: go test -race -count=1 -timeout=60s ./...
       - name: Test portable build mode
