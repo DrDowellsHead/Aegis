@@ -67,6 +67,17 @@ func Cycle(ctx context.Context, db Evaluator, offlineAfter time.Duration, report
 			if liveErr != nil {
 				progress.Errors++
 			}
+			// Periodic progress updates prevent a long, healthy scan from
+			// appearing stale when the fleet contains hundreds of agents.
+			if report != nil && progress.AgentsChecked%4 == 0 {
+				progressCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+				err = report(progressCtx, progress)
+				stop()
+				if err != nil {
+					progress.Errors++
+					return progress, fmt.Errorf("record watch progress: %w", err)
+				}
+			}
 		}
 		if report != nil {
 			progressCtx, stop := context.WithTimeout(ctx, 5*time.Second)
