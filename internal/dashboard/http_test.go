@@ -25,6 +25,12 @@ type stub struct {
 	queries int
 	stats   int
 	last    storage.AgentQuery
+	seriesCalls int
+	historyCalls int
+	seriesResult storage.SeriesResult
+	historyResult storage.HistoryResult
+	seriesQuery storage.SeriesQuery
+	historyQuery storage.HistoryQuery
 	err     error
 }
 
@@ -221,4 +227,17 @@ func TestDashboardOptionsAndListenSafety(t *testing.T) {
 	if err := Serve(ctx, li, h, slog.Default()); err != nil && !errors.Is(err, net.ErrClosed) {
 		t.Fatal(err)
 	}
+}
+
+func (s *stub) ListSeries(_ context.Context,q storage.SeriesQuery)(storage.SeriesResult,error){
+    s.seriesCalls++
+    s.seriesQuery=q
+    if s.err!=nil{return storage.SeriesResult{},s.err}
+    return s.seriesResult,nil
+}
+func (s *stub) ListHistory(_ context.Context,q storage.HistoryQuery)(storage.HistoryResult,error){
+    s.historyCalls++
+    s.historyQuery=q
+    if s.err!=nil{return storage.HistoryResult{},s.err}
+    return s.historyResult,nil
 }

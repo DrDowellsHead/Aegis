@@ -1,0 +1,60 @@
+name: Temporary agent detail verification
+on:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/temporary-detail.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: aegis_test
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: aegis_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aegis_test -d aegis_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AEGIS_TEST_DATABASE_URL: postgres://aegis_test:ci-test-only@127.0.0.1:5432/aegis_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Format Go
+        run: gofmt -w internal/history/queries.go internal/dashboard/http.go internal/dashboard/http_test.go internal/dashboard/detail_test.go
+      - name: Test real PostgreSQL and dashboard routes
+        run: go test -race -count=1 -timeout=120s ./...
+      - name: Static analysis
+        run: go vet ./...
+      - name: Check TypeScript and Vite
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Keep secrets out of browser
+        run: |
+          if grep -R -q -E 'postgres://|AEGIS_HISTORY_TOKEN|AEGIS_DATABASE_URL|AEGIS_DASHBOARD_TOKEN' web/dist; then exit 1; fi
+      - name: Export formatted Go
+        if: always()
+        run: |
+          for f in internal/history/queries.go internal/dashboard/http.go internal/dashboard/http_test.go internal/dashboard/detail_test.go; do
+            echo "BEGIN_AEGIS43:$f"
+            base64 -w0 "$f"
+            echo
+            echo "END_AEGIS43:$f"
+          done

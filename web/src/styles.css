@@ -168,3 +168,29 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .environment-pill { display:none; }
   .login-card { padding:24px; }
 }
+
+/* Agent detail, time-series charts and bounded history table (4.3). */
+.detail-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.detail-toolbar label { color:#bacbda; font-size:12px; font-weight:650; }
+.detail-toolbar select,.detail-toolbar input {
+  background:#14243a; color:#e9f0fa; border:1px solid #405a74; padding:10px 12px;
+}
+.detail-toolbar input { min-width:min(100%,260px); flex:1; max-width:430px; }
+.detail-page .intro .eyebrow a { color:#86caee; }
+.detail-charts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
+.chart-panel:first-child { grid-column:1 / -1; }
+.trend-svg { display:block; width:100%; height:auto; padding:12px 15px 0; }
+.chart-empty { padding:40px 24px; text-align:center; color:#92a8be; font-size:13px; line-height:1.5; }
+.chart-legend { display:flex; flex-wrap:wrap; gap:16px; padding:0 22px 17px; color:#a8bdd2; font-size:11px; }
+.chart-legend span { display:inline-flex; align-items:center; gap:7px; }
+.chart-legend i { display:inline-block; border-radius:50%; width:8px; height:8px; }
+.measurement-panel { margin:24px 0; }
+.measurement-panel .agent-table { min-width:850px; }
+.measurement-panel .agent-table td { vertical-align:top; }
+.measurement-panel details summary { cursor:pointer; color:#e9b884; }
+.measurement-panel details p { max-width:320px; overflow-wrap:anywhere; }
+.measurement-note { padding:28px; }
+@media(max-width:800px) {
+  .detail-charts { grid-template-columns:1fr; }
+  .chart-panel:first-child { grid-column:auto; }
+}

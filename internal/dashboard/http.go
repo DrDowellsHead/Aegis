@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/storage"
+"github.com/DrDowellsHead/Aegis/internal/history"
 )
 
 const cookieName = "aegis_dashboard_session"
@@ -31,6 +32,8 @@ const sessionLifetime = 8 * time.Hour
 type Reader interface {
 	ListAgents(context.Context, storage.AgentQuery) (storage.AgentResult, error)
 	CountAgents(context.Context, time.Duration) (storage.AgentSummary, error)
+	ListSeries(context.Context, storage.SeriesQuery) (storage.SeriesResult,error)
+	ListHistory(context.Context, storage.HistoryQuery) (storage.HistoryResult,error)
 }
 
 type session struct{ expires time.Time }
@@ -145,6 +148,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		h.agents(w, r)
 		return
+	case "/api/web/series":
+        if r.Method!=http.MethodGet{methodNotAllowed(w,"GET");return}
+        if _,ok:=h.authorized(r);!ok{fail(w,http.StatusUnauthorized,"unauthorized");return}
+        h.series(w,r)
+        return
+    case "/api/web/measurements":
+        if r.Method!=http.MethodGet{methodNotAllowed(w,"GET");return}
+        if _,ok:=h.authorized(r);!ok{fail(w,http.StatusUnauthorized,"unauthorized");return}
+        h.measurements(w,r)
+        return
 	case "/api/web/summary":
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, "GET")
@@ -400,4 +413,34 @@ func Serve(ctx context.Context, listener net.Listener, handler http.Handler, log
 		}
 		return err
 	}
+}
+
+func(h *Handler)series(w http.ResponseWriter,r *http.Request){
+    q,err:=history.ParseSeriesRequest(r)
+    if err!=nil{fail(w,http.StatusBadRequest,"invalid_query");return}
+    result,err:=h.reader.ListSeries(r.Context(),q)
+    if err!=nil{
+        h.logger.Error("dashboard series unavailable","error",err)
+        fail(w,http.StatusServiceUnavailable,"data_unavailable")
+        return
+    }
+    jsonResponse(w,http.StatusOK,result)
+}
+
+func(h *Handler)measurements(w http.ResponseWriter,r *http.Request){
+    q,err:=history.ParseHistoryRequest(r)
+    if err!=nil{fail(w,http.StatusBadRequest,"invalid_query");return}
+    result,err:=h.reader.ListHistory(r.Context(),q)
+    if err!=nil{
+        h.logger.Error("dashboard history unavailable","error",err)
+        fail(w,http.StatusServiceUnavailable,"data_unavailable")
+        return
+    }
+    page,err:=history.BuildPage(q,result)
+    if err!=nil{
+        h.logger.Error("dashboard pagination encoding failed","error",err)
+        fail(w,http.StatusInternalServerError,"data_unavailable")
+        return
+    }
+    jsonResponse(w,http.StatusOK,page)
 }

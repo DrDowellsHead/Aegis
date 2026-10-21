@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
+import AgentDetail from './AgentDetail'
 import type { AgentInfo, AgentPage, AgentStatus } from './api/types'
 import {
   ApiError, checkSession, signIn, signOut, loadAgents, loadSummary,
@@ -121,6 +122,7 @@ export default function App() {
   const [agents, setAgents] = useState<AgentPage | null>(null)
   const [loading, setLoading] = useState(false)
   const [dataError, setDataError] = useState('')
+  const onExpired = useCallback(() => { setAuth('anonymous'); setAgents(null); setSummary(null) }, [])
   const cursor = cursorStack.length ? cursorStack[cursorStack.length - 1] ?? '' : ''
 
   useEffect(() => {
@@ -286,15 +288,8 @@ export default function App() {
           <Stats summary={summary} loading={loading} />
           {listPanel()}
         </>}
-        {page === 'agent-detail' && <>
-          <div className="intro">
-            <p className="eyebrow">АГЕНТ</p><h1>Карточка агента</h1>
-            <p className="muted mono long-id">{path.slice('/agents/'.length)}</p>
-          </div>
-          <Panel title="Графики и история" note="Этап 4.3">
-            <Empty title="Графики ещё не подключены" text="На этапе 4.3 будут доступны CPU, RAM, диск и отдельные измерения." />
-          </Panel>
-        </>}
+        {page === 'agent-detail' && <AgentDetail
+          id={path.slice('/agents/'.length)} refresh={refresh} onExpired={onExpired} />}
         {(page === 'incidents' || page === 'settings') && <Panel title={title} note="Будущий этап">
           <Empty title="В разработке" text="Этот раздел появится на следующем этапе Aegis." />
         </Panel>}
@@ -304,7 +299,7 @@ export default function App() {
       </main>
       <footer className="footer">
         <span>Aegis · Apache-2.0</span>
-        <span>Разработчик: <a href="https://github.com/DrDowellsHead" target="_blank" rel="noopener noreferrer">DrDowellsHead</a></span>
+        <span>Разработчик: <a href="https://github.com/DrDowellsHead" target="_blank" rel="noopener noreferrer">DrDowellsHead</a> · <a href="https://github.com/DrDowellsHead/Aegis/issues/new" target="_blank" rel="noopener noreferrer">Предложить сотрудничество</a></span>
       </footer>
     </div>
   </div>
