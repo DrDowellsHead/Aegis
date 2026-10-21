@@ -72,6 +72,22 @@ func (c *Client) Send(ctx context.Context, measurementID string, snapshot metric
 	return nil
 }
 
+// Heartbeat is best-effort at the caller: unlike telemetry samples it is
+// not spooled. Only a committed server response confirms liveness.
+func (c *Client) Heartbeat(ctx context.Context) error {
+	if c == nil || c.svc == nil {
+		return fmt.Errorf("telemetry client is nil")
+	}
+	response, err := c.svc.Heartbeat(ctx, &pb.HeartbeatRequest{AgentId: c.agent.AgentID})
+	if err != nil {
+		return fmt.Errorf("heartbeat RPC: %w", err)
+	}
+	if response == nil || !response.GetDurable() {
+		return status.Error(codes.Unavailable, "server did not confirm heartbeat durability")
+	}
+	return nil
+}
+
 func SendOnce(ctx context.Context, address string, agent identity.Credentials, caPath string, snapshot metrics.Snapshot) (string, error) {
 	client, err := NewClient(address, agent, caPath)
 	if err != nil {

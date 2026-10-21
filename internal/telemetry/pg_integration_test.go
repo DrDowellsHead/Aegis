@@ -102,6 +102,35 @@ func TestPostgresGRPCDurableACK(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("expected 1 row, got %d", count)
 	}
+	// Register only this agent directly; do not re-sync the global registry
+	// while other integration packages share the test database.
+	if _, err := direct.ExecContext(ctx,
+		"UPDATE aegis_agents SET registered=TRUE WHERE agent_id=$1", credentials.AgentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Heartbeat(ctx); err != nil {
+		t.Fatalf("authenticated TLS heartbeat failed: %v", err)
+	}
+	var heartbeat, telemetryAt, sampleAt sql.NullTime
+	if err := direct.QueryRowContext(ctx,
+		"SELECT last_heartbeat_at,last_telemetry_at,last_sample_at FROM aegis_agents WHERE agent_id=$1",
+		credentials.AgentID).Scan(&heartbeat, &telemetryAt, &sampleAt); err != nil {
+		t.Fatal(err)
+	}
+	if !heartbeat.Valid || !telemetryAt.Valid || !sampleAt.Valid ||
+		sampleAt.Time.Year() != 2026 {
+		t.Fatalf("heartbeat must not create or modify measurement time: %v %v %v",
+			heartbeat, telemetryAt, sampleAt)
+	}
+	// A faulty token must not refresh the heartbeat timestamp.
+	badAgent := credentials
+	badAgent.Token = "0000000000000000000000000000000000000000000000000000000000000000"
+	badClient, err := NewClient(listener.Addr().String(), badAgent, ca)
+	if err != nil { t.Fatal(err) }
+	defer badClient.Close()
+	if err := badClient.Heartbeat(ctx); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("invalid TLS heartbeat credentials accepted: %v", err)
+	}
 	stop()
 	select {
 	case err := <-done:

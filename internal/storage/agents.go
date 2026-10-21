@@ -52,8 +52,8 @@ func (p *Postgres) SyncAgents(ctx context.Context, ids []string) error {
 }
 
 // AgentQuery uses UUID keyset pagination to keep the registry bounded.
-// OfflineAfter measures the time elapsed since an authenticated, committed
-// telemetry request (not proof that an OS process is currently running).
+// OfflineAfter measures time since the last committed authenticated heartbeat
+// OR telemetry receipt (not proof that the OS is currently powered on).
 type AgentQuery struct {
 	Limit        int
 	Cursor       string
@@ -66,6 +66,8 @@ type AgentInfo struct {
 	RegisteredAt  time.Time  `json:"registered_at"`
 	LastContactAt *time.Time `json:"last_contact_at"`
 	LastSampleAt  *time.Time `json:"last_sample_at"`
+	LastHeartbeatAt *time.Time `json:"last_heartbeat_at"`
+	LastTelemetryAt *time.Time `json:"last_telemetry_at"`
 	OS            string     `json:"os,omitempty"`
 	Arch          string     `json:"arch,omitempty"`
 }
@@ -88,6 +90,7 @@ func ValidateAgentQuery(q AgentQuery) error {
 
 const listAgentsSQL = `
 SELECT agent_id::text, registered_at, last_contact_at, last_sample_at,
+       last_heartbeat_at, last_telemetry_at,
        COALESCE(last_os,''), COALESCE(last_arch,''),
        CASE WHEN last_contact_at IS NULL THEN 'unknown'
             WHEN last_contact_at >= statement_timestamp() - ($2::bigint * interval '1 second') THEN 'online'
@@ -125,9 +128,9 @@ func (p *Postgres) ListAgents(ctx context.Context, q AgentQuery) (AgentResult, e
 	result := AgentResult{Items: make([]AgentInfo, 0, q.Limit), OfflineAfter: q.OfflineAfter.String()}
 	for rows.Next() {
 		var info AgentInfo
-		var contact, sample sql.NullTime
+		var contact, sample, heartbeat, telemetry sql.NullTime
 		if err := rows.Scan(&info.AgentID, &info.RegisteredAt, &contact, &sample,
-			&info.OS, &info.Arch, &info.Status); err != nil {
+			&heartbeat, &telemetry, &info.OS, &info.Arch, &info.Status); err != nil {
 			return AgentResult{}, fmt.Errorf("scan registered agent: %w", err)
 		}
 		if len(result.Items) == q.Limit {
@@ -137,6 +140,8 @@ func (p *Postgres) ListAgents(ctx context.Context, q AgentQuery) (AgentResult, e
 		info.RegisteredAt = info.RegisteredAt.UTC()
 		info.LastContactAt = timePointer(contact)
 		info.LastSampleAt = timePointer(sample)
+		info.LastHeartbeatAt = timePointer(heartbeat)
+		info.LastTelemetryAt = timePointer(telemetry)
 		result.Items = append(result.Items, info)
 	}
 	if err := rows.Err(); err != nil {

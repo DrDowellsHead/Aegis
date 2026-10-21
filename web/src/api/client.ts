@@ -52,6 +52,8 @@ function agent(input: unknown): AgentInfo {
     last_contact_at: maybeString(r.last_contact_at),
     last_sample_at: maybeString(r.last_sample_at)
   }
+  if (r.last_heartbeat_at !== undefined) value.last_heartbeat_at = maybeString(r.last_heartbeat_at)
+  if (r.last_telemetry_at !== undefined) value.last_telemetry_at = maybeString(r.last_telemetry_at)
   if (typeof r.os === 'string') value.os = r.os
   if (typeof r.arch === 'string') value.arch = r.arch
   return value

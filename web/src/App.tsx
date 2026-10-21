@@ -72,11 +72,13 @@ function Stats({ summary, loading }: { summary: AgentSummary | null; loading: bo
 }
 function AgentRows({ agents }: { agents: AgentInfo[] }) {
   return <div className="agent-table-wrap"><table className="agent-table">
-    <thead><tr><th>Агент</th><th>Состояние</th><th>Последний контакт</th><th>Система</th></tr></thead>
+    <thead><tr><th>Агент</th><th>Состояние</th><th>Последний сигнал</th><th>Heartbeat</th><th>Телеметрия</th><th>Система</th></tr></thead>
     <tbody>{agents.map(agent => <tr key={agent.agent_id}>
       <td><a className="agent-link mono" href={`/agents/${agent.agent_id}`}>{agent.agent_id}</a></td>
       <td><Status value={agent.status} /></td>
       <td>{timeLabel(agent.last_contact_at)}</td>
+      <td>{agent.last_heartbeat_at ? timeLabel(agent.last_heartbeat_at) : 'Нет сигналов'}</td>
+      <td>{agent.last_telemetry_at ? timeLabel(agent.last_telemetry_at) : 'Нет измерений'}</td>
       <td>{agent.os ? `${agent.os} · ${agent.arch ?? '—'}` : '—'}</td>
     </tr>)}</tbody>
   </table></div>
@@ -306,10 +308,10 @@ export default function App() {
           <div className="intro">
             <p className="eyebrow">МОНИТОРИНГ ИНФРАСТРУКТУРЫ</p>
             <h1>{page === 'overview' ? 'Обзор инфраструктуры' : 'Агенты'}</h1>
-            <p className="muted">Состояние определяется последним подтверждённым контактом, а не проверкой питания компьютера.</p>
+            <p className="muted">Online означает недавний подтверждённый heartbeat или приём телеметрии, а не гарантию, что компьютер включён прямо сейчас.</p>
           </div>
           <div className="filter-bar">
-            <label htmlFor="offline-threshold">Считать Offline через</label>
+            <label htmlFor="offline-threshold">Считать потерю связи через</label>
             <select id="offline-threshold" value={offlineAfter} onChange={e => {
               setOfflineAfter(e.target.value)
               setCursorStack([])

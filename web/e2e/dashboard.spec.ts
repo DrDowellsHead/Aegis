@@ -96,7 +96,9 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
           agent_id: ID, status: state.offline ? 'offline' : 'online',
           registered_at: '2026-10-01T12:00:00Z',
           last_contact_at: '2026-10-21T06:00:00Z',
-          last_sample_at: '2026-10-21T06:00:00Z',
+          last_heartbeat_at: '2026-10-21T06:00:00Z',
+          last_telemetry_at: null,
+          last_sample_at: null,
           os: 'linux', arch: 'amd64'
         }],
         has_more: false, offline_after: url.searchParams.get('offline_after') ?? '1m'
@@ -245,4 +247,15 @@ test('viewer can read rules but cannot change or evaluate them', async ({ page }
   await expect(page.getByText('CPU high')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Проверить сейчас' })).toHaveCount(0)
   await expect(page.getByLabel('Создать пороговое правило')).toHaveCount(0)
+})
+
+test('heartbeat alone shows agent online without fabricated measurements', async ({ page }) => {
+  await mockDashboard(page)
+  await page.goto('/agents')
+  await expect(page.getByRole('link', { name: ID })).toBeVisible()
+  const row = page.getByRole('row', { name: new RegExp(ID) })
+  await expect(row.getByText('Нет измерений')).toBeVisible()
+  await expect(row.getByText('Online')).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Heartbeat' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Телеметрия' })).toBeVisible()
 })

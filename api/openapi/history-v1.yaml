@@ -144,6 +144,8 @@ components:
         registered_at: {type: string, format: date-time}
         last_contact_at: {type: [string, 'null'], format: date-time}
         last_sample_at: {type: [string, 'null'], format: date-time}
+        last_heartbeat_at: {type: [string, 'null'], format: date-time, description: Last committed heartbeat receipt on the server; null for legacy agents}
+        last_telemetry_at: {type: [string, 'null'], format: date-time, description: Last committed measurement request receipt, including deduplicated retry}
         os: {type: string, description: Omitted if empty}
         arch: {type: string, description: Omitted if empty}
     AgentPage:

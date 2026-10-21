@@ -181,10 +181,13 @@ func (p *Postgres) Save(ctx context.Context, agentID, measurementID string, snap
 	// Historical replays must NOT overwrite OS/architecture from newer samples.
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO aegis_agents
-			(agent_id,registered,last_contact_at,last_sample_at,last_os,last_arch)
-		VALUES($1,FALSE,clock_timestamp(),$2,$3,$4)
+			(agent_id,registered,last_contact_at,last_telemetry_at,last_sample_at,last_os,last_arch)
+		VALUES($1,FALSE,clock_timestamp(),clock_timestamp(),$2,$3,$4)
 		ON CONFLICT (agent_id) DO UPDATE SET
-			last_contact_at=clock_timestamp(),
+			last_contact_at=GREATEST(COALESCE(aegis_agents.last_contact_at,
+				'-infinity'::timestamptz),clock_timestamp()),
+			last_telemetry_at=GREATEST(COALESCE(aegis_agents.last_telemetry_at,
+				'-infinity'::timestamptz),clock_timestamp()),
 			last_os=CASE WHEN EXCLUDED.last_sample_at >=
 				COALESCE(aegis_agents.last_sample_at,'-infinity'::timestamptz)
 				THEN EXCLUDED.last_os ELSE aegis_agents.last_os END,

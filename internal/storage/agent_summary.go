@@ -7,7 +7,7 @@ import (
 )
 
 // AgentSummary counts registered agents using one database timestamp, so
-// the cards always agree internally. Status is telemetry contact freshness,
+// the cards always agree internally. Status is authenticated heartbeat OR telemetry contact freshness,
 // not proof that a computer is switched on.
 type AgentSummary struct {
 	Total        int64     `json:"total"`

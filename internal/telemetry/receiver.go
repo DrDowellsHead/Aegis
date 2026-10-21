@@ -24,6 +24,12 @@ type MeasurementStore interface {
 	Save(context.Context, string, string, *pb.Snapshot) (alreadyStored bool, err error)
 }
 
+// HeartbeatRecorder is a separate persistence capability. Heartbeats never
+// create measurements, touch snapshot clocks or modify the disk spool.
+type HeartbeatRecorder interface {
+	RecordHeartbeat(context.Context, string) error
+}
+
 // Receiver authenticates before consulting the durable store.
 type Receiver struct {
 	pb.UnimplementedTelemetryServiceServer
@@ -66,6 +72,35 @@ func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendRespo
 		"agent_id", req.AgentId, "measurement_id", req.MeasurementId, "already_stored", already)
 	// Never claim durability if the INSERT was not committed and verified.
 	return &pb.SendResponse{Received: true, Durable: true, AlreadyStored: already}, nil
+}
+
+// Heartbeat uses the same per-agent Bearer token and verified TLS channel as
+// telemetry.Send. A successful reply means the DB UPDATE has committed.
+func (r *Receiver) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
+	if req == nil || !identity.ValidID(req.GetAgentId()) {
+		return nil, status.Error(codes.Unauthenticated, "invalid agent credentials")
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "invalid agent credentials")
+	}
+	auth := md.Get("authorization")
+	if len(auth) != 1 || !strings.HasPrefix(auth[0], "Bearer ") ||
+		!r.registry.Authenticate(req.GetAgentId(), strings.TrimPrefix(auth[0], "Bearer ")) {
+		return nil, status.Error(codes.Unauthenticated, "invalid agent credentials")
+	}
+	store, ok := r.store.(HeartbeatRecorder)
+	if !ok {
+		return nil, status.Error(codes.Unavailable, "heartbeat storage unavailable")
+	}
+	if err := store.RecordHeartbeat(ctx, req.GetAgentId()); err != nil {
+		if errors.Is(err, storage.ErrAgentNotRegistered) {
+			return nil, status.Error(codes.FailedPrecondition, "agent registry not synchronized")
+		}
+		r.logger.Error("heartbeat database update failed", "agent_id", req.GetAgentId(), "error", err)
+		return nil, status.Error(codes.Unavailable, "heartbeat database unavailable")
+	}
+	return &pb.HeartbeatResponse{Durable: true}, nil
 }
 
 func validMeasurementID(id string) bool {

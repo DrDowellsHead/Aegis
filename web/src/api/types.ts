@@ -15,6 +15,8 @@ export interface AgentInfo {
   registered_at: ISO8601
   last_contact_at: ISO8601 | null
   last_sample_at: ISO8601 | null
+  last_heartbeat_at?: ISO8601 | null
+  last_telemetry_at?: ISO8601 | null
   os?: string
   arch?: string
 }
