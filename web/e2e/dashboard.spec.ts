@@ -54,6 +54,15 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
       await respond(200, { revoked: 1 }); return
     }
 
+    if (name === '/api/web/incidents/settings') {
+      if (request.method() === 'POST' && state.role !== 'admin') {
+        await respond(403, { error: 'forbidden' }); return
+      }
+      const body = request.method() === 'POST' ? request.postDataJSON() as {
+        cooldown_seconds: number; escalate_after_seconds: number
+      } : { cooldown_seconds: 300, escalate_after_seconds: 900 }
+      await respond(200, { ...body, updated_at: new Date().toISOString() }); return
+    }
     if (name === '/api/web/incidents') {
       const active = url.searchParams.get('state') ?? 'active'
       const item = {
@@ -61,7 +70,8 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
         state: active === 'resolved' ? 'resolved' : 'open',
         opened_at: '2026-10-21T10:00:00Z',
         acknowledged_at: null, acknowledged_by: null,
-        resolved_at: null, resolution: null
+        resolved_at: null, resolution: null,
+        severity: 'warning', escalated_at: null, suppressed_checks: 0, last_suppressed_at: null
       }
       await respond(200, { items: [item], has_more: false }); return
     }
@@ -314,4 +324,22 @@ test('viewer can inspect incidents but has no write controls', async ({ page }) 
   await expect(page.getByRole('button', { name: 'Проверить связь' })).toHaveCount(0)
   await page.getByRole('button', { name: 'История' }).click()
   await expect(page.getByText('Открытие', { exact: false })).toBeVisible()
+})
+
+test('admin edits persistent incident policy and reads incident severity', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'admin' })
+  await page.goto('/incidents')
+  await expect(page.getByLabel('Политика инцидентов')).toBeVisible()
+  await expect(page.getByText('Приоритет: warning')).toBeVisible()
+  await page.getByLabel('Cooldown (сек., 0 — отключён)').fill('120')
+  await page.getByLabel('Эскалация после (сек.)').fill('600')
+  await page.getByRole('button', { name: 'Сохранить политику' }).click()
+  await expect(page.getByText('Политика сохранена в PostgreSQL.')).toBeVisible()
+})
+
+test('viewer sees policy values but cannot edit the incident policy', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/incidents')
+  await expect(page.getByLabel('Cooldown (сек., 0 — отключён)')).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Сохранить политику' })).toHaveCount(0)
 })
