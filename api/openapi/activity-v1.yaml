@@ -1,0 +1,56 @@
+openapi: 3.1.0
+info:
+  title: Aegis activity journal API
+  version: 1.0.0
+  description: |
+    Read-only authenticated journal (step 5.6). Existing cookie-session
+    security applies to admin and viewer. No secrets or raw request bodies.
+paths:
+  /api/web/activity:
+    get:
+      summary: List incident transitions, operator actions and delivery attempts
+      parameters:
+        - {name: category, in: query, schema: {type: string, enum: [all, incident, operator, delivery]}}
+        - {name: action, in: query, schema: {type: string, maxLength: 32}}
+        - {name: actor, in: query, schema: {type: string, maxLength: 80}}
+        - {name: agent_id, in: query, schema: {type: string, format: uuid}}
+        - {name: incident_id, in: query, schema: {type: string, format: uuid}}
+        - {name: search, in: query, description: Literal substring of event summary, schema: {type: string, minLength: 2, maxLength: 80}}
+        - {name: from, in: query, description: Inclusive instant (UTC or offset), schema: {type: string, format: date-time}}
+        - {name: to, in: query, description: Exclusive instant, schema: {type: string, format: date-time}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: cursor, in: query, description: Last returned positive journal ID, schema: {type: string}}
+      responses:
+        '200':
+          description: Newest audit entries first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items,has_more]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/ActivityEntry'}
+                  has_more: {type: boolean}
+                  next_cursor: {type: string}
+        '400': {description: Unknown, duplicated or invalid query parameters}
+        '401': {description: Authentication required}
+        '405': {description: Read-only endpoint}
+        '503': {description: Storage unavailable; no sensitive SQL error is returned}
+components:
+  schemas:
+    ActivityEntry:
+      type: object
+      required: [id,at,category,action,actor,agent_id,incident_id,reference_id,summary,details]
+      properties:
+        id: {type: integer, format: int64}
+        at: {type: string, format: date-time}
+        category: {type: string, enum: [incident,operator,delivery]}
+        action: {type: string}
+        actor: {type: string}
+        agent_id: {type: [string,'null'], format: uuid}
+        incident_id: {type: [string,'null'], format: uuid}
+        reference_id: {type: string}
+        summary: {type: string}
+        details: {type: object, additionalProperties: true}
