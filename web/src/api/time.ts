@@ -17,7 +17,9 @@ export function chooseStep(durationMS: number): Step {
     throw new RangeError('Период должен быть больше нуля и не длиннее 90 суток.')
   }
   const step = (Object.keys(stepMilliseconds) as Step[])
-    .find(candidate => durationMS <= MAX_BUCKETS * stepMilliseconds[candidate])
+    // Buckets are epoch-anchored: a nonaligned start can add one extra
+    // populated bucket, so reserve one slot for that partial interval.
+    .find(candidate => durationMS <= (MAX_BUCKETS - 1) * stepMilliseconds[candidate])
   if (!step) throw new RangeError('Невозможно подобрать шаг агрегации.')
   return step
 }

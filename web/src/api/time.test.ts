@@ -24,6 +24,8 @@ describe('fixed and custom UTC windows', () => {
     expect(chooseStep(3_600_000)).toBe('1m')
     expect(chooseStep(86_400_000)).toBe('5m')
     expect(chooseStep(7 * 86_400_000)).toBe('1h')
+    // Exactly 500 elapsed minute-steps can touch 501 epoch-aligned bins.
+    expect(chooseStep(500 * 60_000)).toBe('5m')
     expect(() => chooseStep(0)).toThrow()
     expect(() => chooseStep(MAX_RANGE_MS + 1)).toThrow()
   })
