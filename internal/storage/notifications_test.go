@@ -128,7 +128,7 @@ func TestNotificationTransactionalOutboxPostgres(t *testing.T) {
 	if len(ids) != 3 {
 		t.Fatalf("not all messages claimed: %d", len(ids))
 	}
-	if _, err = db.RecordHeartbeat(ctx, id); err != nil {
+	if err = db.RecordHeartbeat(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.EvaluateAgentLiveness(ctx, id, time.Minute); err != nil {
