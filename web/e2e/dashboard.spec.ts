@@ -49,6 +49,15 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
         { username: 'reader', role: 'viewer' }
       ] }); return
     }
+    if (name === '/api/web/admin/security-events') {
+      if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+      await respond(200, { items: [{
+        id: 33, at: '2026-10-21T10:00:00Z',
+        action: 'login_ok', actor: 'operator',
+        subject: '', role: 'admin', affected_sessions: 0
+      }], has_more: false })
+      return
+    }
     if (name === '/api/web/admin/sessions/revoke') {
       if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
       await respond(200, { revoked: 1 }); return
@@ -407,4 +416,24 @@ test('incidents view shows latest automatic monitoring health', async ({ page })
   await expect(status).toContainText('Проверено агентов: 5')
   await expect(status).toContainText('правил: 8')
   await expect(status).toContainText('Интервал: 30 сек.')
+})
+
+test('admin can review and filter security events without exposing credentials', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'admin' })
+  await page.goto('/settings')
+  const audit = page.getByLabel('Аудит безопасности')
+  await expect(audit).toBeVisible()
+  await expect(audit.getByText('Успешный вход')).toBeVisible()
+  await expect(audit.getByText('operator')).toBeVisible()
+  await audit.getByLabel('Действие').selectOption('login_ok')
+  await audit.getByLabel('Пользователь').fill('operator')
+  await audit.getByRole('button', { name: 'Применить фильтры' }).click()
+  await expect(audit.getByText('Успешный вход')).toBeVisible()
+  await expect(audit).not.toContainText('password_hash')
+})
+test('viewer cannot see security audit or revoke sessions in settings', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/settings')
+  await expect(page.getByLabel('Аудит безопасности')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Отозвать все' })).toHaveCount(0)
 })
