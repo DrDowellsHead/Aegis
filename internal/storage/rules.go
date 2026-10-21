@@ -221,7 +221,9 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 	if p == nil || p.db == nil {
 		return nil, fmt.Errorf("database unavailable")
 	}
-	at := time.Now().UTC()
+	// PostgreSQL timestamptz has microsecond precision; keep API and persisted
+	// transition timestamps identical across the first and subsequent reads.
+	at := time.Now().UTC().Truncate(time.Microsecond)
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin rule evaluation: %w", err)
