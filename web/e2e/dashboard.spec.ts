@@ -7,13 +7,17 @@ type MockOptions = {
   signedIn?: boolean
   offline?: boolean
   failReads?: boolean
+  remote?: boolean
+  role?: 'admin' | 'viewer'
 }
 async function mockDashboard(page: Page, options: MockOptions = {}) {
   const state = {
     signedIn: options.signedIn ?? true,
     offline: options.offline ?? false,
     failReads: options.failReads ?? false,
-    listRequests: 0
+    listRequests: 0,
+    remote: options.remote ?? false,
+    role: options.role ?? 'admin'
   }
   await page.route('**/api/web/**', async route => {
     const request = route.request()
@@ -22,11 +26,14 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
     const respond = async (status: number, data: unknown) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) })
     if (name === '/api/web/session') {
-      await respond(200, { authenticated: state.signedIn }); return
+      await respond(200, state.remote ? {
+        authenticated: state.signedIn, mode: 'remote',
+        ...(state.signedIn ? { username: 'operator', role: state.role } : {})
+      } : { authenticated: state.signedIn }); return
     }
     if (name === '/api/web/login') {
-      const body = request.postDataJSON() as { token?: string }
-      if (body.token !== TOKEN) { await respond(401, { error: 'unauthorized' }); return }
+      const body = request.postDataJSON() as { token?: string; username?: string }
+      if (body.token !== TOKEN || (state.remote && body.username !== 'operator')) { await respond(401, { error: 'unauthorized' }); return }
       state.signedIn = true
       await respond(200, { authenticated: true }); return
     }
@@ -35,6 +42,17 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
       await respond(200, { authenticated: false }); return
     }
     if (!state.signedIn) { await respond(401, { error: 'unauthorized' }); return }
+    if (name === '/api/web/admin/users') {
+      if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+      await respond(200, { items: [
+        { username: 'operator', role: 'admin' },
+        { username: 'reader', role: 'viewer' }
+      ] }); return
+    }
+    if (name === '/api/web/admin/sessions/revoke') {
+      if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+      await respond(200, { revoked: 1 }); return
+    }
     if (state.failReads) { await respond(503, { error: 'data_unavailable' }); return }
     if (name === '/api/web/summary') {
       await respond(200, {
@@ -155,4 +173,26 @@ test('mobile navigation stays usable', async ({ page }) => {
   await page.getByRole('link', { name: 'Агенты', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Агенты', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: ID })).toBeVisible()
+})
+
+test('HTTPS operator login and administrator session tools', async ({ page }) => {
+  await mockDashboard(page, { remote: true, signedIn: false, role: 'admin' })
+  await page.goto('/')
+  await expect(page.getByLabel('Пользователь')).toBeVisible()
+  await page.getByLabel('Пользователь').fill('operator')
+  await page.locator('#dashboard-token').fill(TOKEN)
+  await page.getByRole('button', { name: 'Войти' }).click()
+  await expect(page.getByRole('heading', { name: 'Обзор инфраструктуры' })).toBeVisible()
+  await page.getByRole('link', { name: 'Настройки' }).click()
+  await expect(page.getByText('reader', { exact: true })).toBeVisible()
+  page.once('dialog', dialog => void dialog.accept())
+  await page.getByRole('row', { name: /reader viewer/ }).getByRole('button', { name: 'Отозвать все' }).click()
+  await expect(page.getByText('Сессии пользователя reader отозваны: 1')).toBeVisible()
+})
+
+test('viewer has no administrator controls', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/settings')
+  await expect(page.getByText('управление пользователями доступно только администратору', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Отозвать все' })).toHaveCount(0)
 })
