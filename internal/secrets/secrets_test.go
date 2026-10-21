@@ -32,7 +32,8 @@ func TestRejectSecretFileAbuse(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Repeat("z", maxSecretSize + 1)), 0600); err != nil { t.Fatal(err) }
 	if _, err := Resolve(key); err == nil { t.Fatal("oversized secret accepted") }
 	if runtime.GOOS != "windows" {
-		if err := os.WriteFile(path, []byte("private"), 0644); err != nil { t.Fatal(err) }
+		if err := os.WriteFile(path, []byte("private"), 0600); err != nil { t.Fatal(err) }
+		if err := os.Chmod(path, 0644); err != nil { t.Fatal(err) }
 		if _, err := Resolve(key); err == nil { t.Fatal("public secret accepted") }
 	}
 	link := filepath.Join(t.TempDir(), "link")
