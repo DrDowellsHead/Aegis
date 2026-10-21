@@ -41,6 +41,10 @@ func incidentDB(t *testing.T) (*Postgres, context.Context, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
+		// Journal entries deliberately have no cascading foreign keys to
+		// historic incidents. Remove test-specific agent entries explicitly.
+		_,_ = db.db.ExecContext(context.Background(),
+			"DELETE FROM aegis_activity_log WHERE agent_id=$1",agentID)
 		// Notification attempts/jobs reference incident transition events.
 		_, _ = db.db.ExecContext(context.Background(),
 			`DELETE FROM aegis_notification_attempts WHERE job_id IN
