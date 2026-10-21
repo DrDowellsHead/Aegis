@@ -121,3 +121,20 @@ export async function updateIncidentSettings(cooldownSeconds:number,
     })
   }))
 }
+
+export interface NotificationStats {
+  pending:number
+  retry:number
+  leased:number
+  sent:number
+  dead:number
+}
+export async function getNotificationStats():Promise<NotificationStats> {
+  const raw=obj(await requestJSON('/api/web/notifications/stats'))
+  for(const k of ['pending','retry','leased','sent','dead']) {
+    if(typeof raw[k]!=='number' || !Number.isSafeInteger(raw[k]) || (raw[k] as number)<0){
+      throw new Error('Invalid notification statistics')
+    }
+  }
+  return raw as unknown as NotificationStats
+}
