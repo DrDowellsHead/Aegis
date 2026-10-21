@@ -1,0 +1,37 @@
+name: Generate heartbeat protobuf (one-time)
+on:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/generate-heartbeat-52.yml]
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Install protoc and pinned plugins
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+      - name: Generate versioned gRPC stubs
+        shell: bash
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          bash scripts/generate-proto.sh
+          gofmt -w internal/telemetry/v1/telemetry.pb.go internal/telemetry/v1/telemetry_grpc.pb.go
+          git add internal/telemetry/v1/telemetry.pb.go internal/telemetry/v1/telemetry_grpc.pb.go
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Regenerate gRPC stubs for agent heartbeat"
+            git push origin HEAD:develop
+          fi

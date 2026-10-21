@@ -10,6 +10,8 @@ import "google/protobuf/timestamp.proto";
 // A durable acknowledgement is sent only after the database commit.
 service TelemetryService {
   rpc Send(SendRequest) returns (SendResponse);
+  // Presence signal independent of measurement collection and spool replay.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 }
 
 message SendRequest {
@@ -26,6 +28,16 @@ message SendResponse {
   // Server confirms successful durable storage (including a stored duplicate).
   bool durable = 2;
   bool already_stored = 3;
+}
+
+// Only server receipt time is trusted for liveness. No agent clock or payload.
+message HeartbeatRequest {
+  string agent_id = 1;
+}
+
+message HeartbeatResponse {
+  // True only after the liveness UPDATE commits in PostgreSQL.
+  bool durable = 1;
 }
 
 message Snapshot {
