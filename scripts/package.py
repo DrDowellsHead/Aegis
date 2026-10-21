@@ -54,6 +54,8 @@ def main():
                 shutil.copy2(root / "NOTICE", stage)
                 shutil.copy2(root / "docs" / "installation.md", stage / "INSTALL.md")
                 shutil.copy2(root / "docs" / "metrics.md", stage / "METRICS.md")
+                shutil.copy2(root / "docs" / "configuration.md", stage / "CONFIGURATION.md")
+                shutil.copy2(root / "configs" / "aegis.example.json", stage / "aegis.example.json")
                 for folder, path in licenses:
                     destination = stage / "THIRD_PARTY_LICENSES" / folder
                     destination.mkdir(parents=True, exist_ok=True)
