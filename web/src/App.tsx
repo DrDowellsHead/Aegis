@@ -289,7 +289,6 @@ export default function App() {
             aria-current={active ? 'page' : undefined} onClick={e => navigate(e, item.path)}>
             <span className="nav-symbol" aria-hidden="true">{item.symbol}</span>
             <span className="nav-text">{item.label}</span>
-            {item.future && <span className="nav-future">скоро</span>}
           </a>
         })}
       </nav>
