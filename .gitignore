@@ -29,3 +29,9 @@ web/blob-report/
 # Private remote dashboard operator registry
 /dashboard-users.json
 /dashboard-users.json.*
+
+# Local deployment configuration and private keys (never commit)
+*.local.json
+configs/private/
+*.secret
+*.password

@@ -167,7 +167,12 @@ Linux; центральный Go-сервер с PostgreSQL; веб-интерф
 
 ## Фаза 7. Продукт и релизы
 
-- 7.1: единая конфигурация agent/server, поддержка секретов без git.
+- 7.1: единая версионированная JSON-конфигурация для agent/receiver,
+  запуск через `aegis start`, проверка `validate-config`,
+  строгая валидация и секреты из env либо приватных файлов *_FILE
+  (в develop; ожидает CI). Управление остальными серверными службами
+  и сервисными аккаунтами — фазы 7.2–7.3.
+  [Конфигурация](configuration.md).
 - 7.2: агенты как Windows Service, systemd service, launchd daemon.
 - 7.3: Docker Compose для серверной части, схемы БД и конфигурации.
 - 7.4: Windows installer, macOS package, Linux пакеты/службы.
