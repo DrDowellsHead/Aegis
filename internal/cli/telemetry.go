@@ -74,6 +74,8 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	address := flags.String("listen", "127.0.0.1:9090", "gRPC listening address (public binding requires firewall rules)")
 	cert := flags.String("tls-cert", "", "server TLS certificate chain")
 	key := flags.String("tls-key", "", "server TLS private key")
+	certHost := flags.String("tls-host", "", "optional expected server certificate DNS name or IP SAN")
+	certCA := flags.String("tls-ca-cert", "", "optional explicit CA PEM to validate server certificate chain")
 	registryPath := flags.String("agents-file", "", "registry of authorized agents")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -85,7 +87,11 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "receive requires --tls-cert, --tls-key and --agents-file")
 		return 2
 	}
-	transport, err := telemetry.ServerCredentials(*cert, *key)
+	if *certCA != "" && *certHost == "" {
+		fmt.Fprintln(errOut, "--tls-ca-cert requires --tls-host so the complete chain and SAN can be checked")
+		return 2
+	}
+	transport, err := telemetry.ServerCredentialsForHost(*cert, *key, *certCA, *certHost)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
 		return 2
