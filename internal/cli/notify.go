@@ -26,14 +26,20 @@ func runNotify(ctx context.Context, args []string, out, errOut io.Writer) int {
 	webhook := flags.String("webhook-url", "", "public HTTPS webhook without embedded secrets")
 	poll := flags.Duration("poll", 3*time.Second, "poll interval (1s to 1m)")
 	once := flags.Bool("once", false, "drain currently ready jobs then exit")
+	deliveryRate := flags.Int("max-deliveries-per-minute", 60, "maximum delivery attempts per minute per worker (1..600)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
-	if flags.NArg() != 0 || *poll < time.Second || *poll > time.Minute {
-		fmt.Fprintln(errOut, "invalid notify arguments or poll interval")
+	if flags.NArg() != 0 || *poll < time.Second || *poll > time.Minute || *deliveryRate < 1 || *deliveryRate > 600 {
+		fmt.Fprintln(errOut, "invalid notify arguments, poll interval or delivery rate (1..600 per minute)")
+		return 2
+	}
+	pacer, err := notify.NewPacer(*deliveryRate)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
 		return 2
 	}
 	cfg := notify.Config{
@@ -71,9 +77,14 @@ func runNotify(ctx context.Context, args []string, out, errOut io.Writer) int {
 		channels = append(channels, r.Channel)
 	}
 	logger := slog.New(slog.NewJSONHandler(errOut, nil))
-	logger.Info("notification worker running", "channels", channels, "poll", poll.String(), "once", *once)
+	logger.Info("notification worker running", "channels", channels, "poll", poll.String(), "once", *once,
+		"max_deliveries_per_minute", *deliveryRate)
 	for {
 		if ctx.Err() != nil {
+			return 0
+		}
+		// Wait BEFORE taking a lease: slow providers must not cause lease expiry.
+		if err := pacer.Wait(ctx); err != nil {
 			return 0
 		}
 		callCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
@@ -85,6 +96,7 @@ func runNotify(ctx context.Context, args []string, out, errOut io.Writer) int {
 				return 1
 			}
 		} else if job != nil {
+			pacer.NoteAttempt()
 			sendCtx, stop := context.WithTimeout(ctx, 12*time.Second)
 			outcome := sender.Deliver(sendCtx, *job)
 			stop()

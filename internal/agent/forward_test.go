@@ -179,3 +179,37 @@ func TestCancellationInterruptsBackoffAfterCollectionDone(t *testing.T) {
 		t.Fatalf("canceled delivery erased queue: %d", n)
 	}
 }
+
+type overloadedThenSend struct {
+	ids []string
+}
+
+func (s *overloadedThenSend) Send(_ context.Context, r spool.Record) error {
+	s.ids = append(s.ids, r.MeasurementID)
+	if len(s.ids) <= 2 {
+		return status.Error(codes.ResourceExhausted, "server busy")
+	}
+	return nil
+}
+
+func TestBackpressureRetriesStableMeasurementID(t *testing.T) {
+	q, err := spool.Open(filepath.Join(t.TempDir(), "outbox"), agentID, spool.MaxRecordBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+	sender := &overloadedThenSend{}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err = Forward(ctx, &testCollector{}, sender, q,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), testOptions(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.ids) != 3 || sender.ids[0] != sender.ids[1] || sender.ids[1] != sender.ids[2] {
+		t.Fatalf("backpressure changed measurement ID: %v", sender.ids)
+	}
+	if remaining, _ := q.Stats(); remaining != 0 {
+		t.Fatalf("durable result did not drain outbox: %d", remaining)
+	}
+}

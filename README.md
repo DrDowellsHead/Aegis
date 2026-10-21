@@ -1026,3 +1026,25 @@ Aegis пока предназначен для одной администрат
 контроль доступа и системный аудит машины администратора.
 
 Архитектура и границы гарантий: [ADR 0027](docs/adr/0027-security-audit.md).
+
+
+## Phase 6.5: bounded ingestion and notifications
+
+The receiver enforces **process-global** admission limits, in addition to gRPC's
+per-connection stream limit and PostgreSQL's existing bounded connection pool:
+
+```sh
+aegis receive --max-inflight-samples 8 --max-inflight-heartbeats 2 --max-per-agent-samples 2 # plus the required TLS/registry flags
+aegis notify --max-deliveries-per-minute 60 # plus channel configuration
+```
+
+When measurement capacity is exhausted, an authenticated sender receives gRPC
+`ResourceExhausted` without a durable ACK. The `forward` agent keeps the
+original spool record and retries with exponential backoff and unchanged ID.
+Heartbeat requests use separate concurrency slots to reduce liveness starvation.
+Notification attempts are paced **before** claiming a durable PostgreSQL lease;
+the interval is a per-worker limit, not a cross-process global quota.
+See [ADR 0029](docs/adr/0029-backpressure.md).
+
+Before any stable release we must still run the postponed operating-system,
+network-interruption, real disk-full, Windows ACL and PostgreSQL recovery tests.
