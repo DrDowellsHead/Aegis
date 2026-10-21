@@ -74,7 +74,7 @@ func TestThresholdIncidentLifecyclePostgres(t *testing.T) {
 	db, ctx, id := incidentDB(t)
 	// Step 5.3 intentionally tested immediate reopening. Opt out of the
 	// step 5.4 cooldown to preserve that specific lifecycle scenario.
-	setIncidentPolicyForTest(t,db,ctx,0,900)
+	setIncidentPolicyForTest(t, db, ctx, 0, 900)
 
 	rule, err := db.CreateRule(ctx, RuleInput{AgentID: id, Rule: alerts.Rule{
 		Name: "Critical CPU", Metric: "cpu", Direction: "above", FireAt: 85, RecoverAt: 70,
@@ -215,7 +215,7 @@ func TestManualResolveAndPaginationPostgres(t *testing.T) {
 	db, ctx, id := incidentDB(t)
 	// Step 5.3 intentionally tested immediate reopening. Opt out of the
 	// step 5.4 cooldown to preserve that specific lifecycle scenario.
-	setIncidentPolicyForTest(t,db,ctx,0,900)
+	setIncidentPolicyForTest(t, db, ctx, 0, 900)
 
 	_, err := db.db.ExecContext(ctx, `UPDATE aegis_agents SET last_contact_at=
 		clock_timestamp()-interval '2 hours' WHERE agent_id=$1`, id)
@@ -252,17 +252,23 @@ func TestManualResolveAndPaginationPostgres(t *testing.T) {
 	}
 }
 
-func setIncidentPolicyForTest(t *testing.T,db *Postgres,ctx context.Context,cooldown,escalate int) {
+func setIncidentPolicyForTest(t *testing.T, db *Postgres, ctx context.Context, cooldown, escalate int) {
 	t.Helper()
-	old,err:=db.GetIncidentSettings(ctx)
-	if err!=nil {t.Fatal(err)}
-	if _,err=db.UpdateIncidentSettings(ctx,IncidentSettings{
-		CooldownSeconds:cooldown,EscalateAfterSeconds:escalate,
-	});err!=nil {t.Fatal(err)}
-	t.Cleanup(func(){
-		back, cancel:=context.WithTimeout(context.Background(),10*time.Second)
+	old, err := db.GetIncidentSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.UpdateIncidentSettings(ctx, IncidentSettings{
+		CooldownSeconds: cooldown, EscalateAfterSeconds: escalate,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		back, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_,err:=db.UpdateIncidentSettings(back,old)
-		if err!=nil {t.Errorf("restore incident policy: %v",err)}
+		_, err := db.UpdateIncidentSettings(back, old)
+		if err != nil {
+			t.Errorf("restore incident policy: %v", err)
+		}
 	})
 }

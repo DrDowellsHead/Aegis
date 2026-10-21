@@ -18,14 +18,16 @@ type mockIncidentStore struct {
 	fail                             error
 }
 
-func (m *mockIncidentStore) GetIncidentSettings(_ context.Context)(storage.IncidentSettings,error){
-	return storage.IncidentSettings{CooldownSeconds:300,EscalateAfterSeconds:900,UpdatedAt:time.Now().UTC()},nil
+func (m *mockIncidentStore) GetIncidentSettings(_ context.Context) (storage.IncidentSettings, error) {
+	return storage.IncidentSettings{CooldownSeconds: 300, EscalateAfterSeconds: 900, UpdatedAt: time.Now().UTC()}, nil
 }
-func (m *mockIncidentStore) UpdateIncidentSettings(_ context.Context,v storage.IncidentSettings)(storage.IncidentSettings,error){
-	m.actor="policy-updated"
-	if m.fail!=nil {return storage.IncidentSettings{},m.fail}
-	v.UpdatedAt=time.Now().UTC()
-	return v,nil
+func (m *mockIncidentStore) UpdateIncidentSettings(_ context.Context, v storage.IncidentSettings) (storage.IncidentSettings, error) {
+	m.actor = "policy-updated"
+	if m.fail != nil {
+		return storage.IncidentSettings{}, m.fail
+	}
+	v.UpdatedAt = time.Now().UTC()
+	return v, nil
 }
 func (m *mockIncidentStore) ListIncidents(_ context.Context, _ storage.IncidentQuery) (storage.IncidentPage, error) {
 	m.lists++
@@ -107,33 +109,35 @@ func TestIncidentAPIAuthenticationRBACAndOrigin(t *testing.T) {
 	}
 }
 func TestIncidentPolicyHTTPRoleAndValidation(t *testing.T) {
-	h:=testRemote(t)
-	store:=&mockIncidentStore{stub:&stub{}}
-	h.reader=store
-	viewer:=loginRemote(t,h,"observer","viewer-password-very-long")
-	admin:=loginRemote(t,h,"operator","admin-password-very-long")
-	if w:=remoteRequest(h,"GET","/api/web/incidents/settings","","",viewer);w.Code!=200 ||
-		!strings.Contains(w.Body.String(),`"cooldown_seconds":300`) {
-		t.Fatalf("viewer failed to read policy: %d %s",w.Code,w.Body.String())
+	h := testRemote(t)
+	store := &mockIncidentStore{stub: &stub{}}
+	h.reader = store
+	viewer := loginRemote(t, h, "observer", "viewer-password-very-long")
+	admin := loginRemote(t, h, "operator", "admin-password-very-long")
+	if w := remoteRequest(h, "GET", "/api/web/incidents/settings", "", "", viewer); w.Code != 200 ||
+		!strings.Contains(w.Body.String(), `"cooldown_seconds":300`) {
+		t.Fatalf("viewer failed to read policy: %d %s", w.Code, w.Body.String())
 	}
-	valid:=`{"cooldown_seconds":120,"escalate_after_seconds":600}`
-	if w:=remoteRequest(h,"POST","/api/web/incidents/settings",valid,publicOriginForTest,viewer);w.Code!=403 {
-		t.Fatalf("viewer changed policy: %d",w.Code)
+	valid := `{"cooldown_seconds":120,"escalate_after_seconds":600}`
+	if w := remoteRequest(h, "POST", "/api/web/incidents/settings", valid, publicOriginForTest, viewer); w.Code != 403 {
+		t.Fatalf("viewer changed policy: %d", w.Code)
 	}
-	if w:=remoteRequest(h,"POST","/api/web/incidents/settings",valid,"https://evil.example",admin);w.Code!=403 {
-		t.Fatalf("CSRF policy update allowed: %d",w.Code)
+	if w := remoteRequest(h, "POST", "/api/web/incidents/settings", valid, "https://evil.example", admin); w.Code != 403 {
+		t.Fatalf("CSRF policy update allowed: %d", w.Code)
 	}
-	for _,bad:=range []string{
+	for _, bad := range []string{
 		`{"cooldown_seconds":-1,"escalate_after_seconds":900}`,
 		`{"cooldown_seconds":300,"escalate_after_seconds":10}`,
 		`{"cooldown_seconds":300,"escalate_after_seconds":900,"extra":1}`,
-	}{
-		if w:=remoteRequest(h,"POST","/api/web/incidents/settings",bad,publicOriginForTest,admin);w.Code!=400{
-			t.Fatalf("bad policy accepted: %d %s",w.Code,w.Body.String())
+	} {
+		if w := remoteRequest(h, "POST", "/api/web/incidents/settings", bad, publicOriginForTest, admin); w.Code != 400 {
+			t.Fatalf("bad policy accepted: %d %s", w.Code, w.Body.String())
 		}
 	}
-	if w:=remoteRequest(h,"POST","/api/web/incidents/settings",valid,publicOriginForTest,admin);w.Code!=200 ||
-		store.actor!="policy-updated" {t.Fatalf("valid policy update: %d %s",w.Code,w.Body.String())}
+	if w := remoteRequest(h, "POST", "/api/web/incidents/settings", valid, publicOriginForTest, admin); w.Code != 200 ||
+		store.actor != "policy-updated" {
+		t.Fatalf("valid policy update: %d %s", w.Code, w.Body.String())
+	}
 }
 
 func TestIncidentAPIRejectsMalformedAndRedactsDBErrors(t *testing.T) {

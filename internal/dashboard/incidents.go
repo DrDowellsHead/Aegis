@@ -17,8 +17,8 @@ type incidentStore interface {
 	ListIncidentEvents(context.Context, string) ([]storage.IncidentEvent, error)
 	ChangeIncident(context.Context, string, string, string) (storage.Incident, error)
 	EvaluateAgentLiveness(context.Context, string, time.Duration) (string, error)
-	GetIncidentSettings(context.Context) (storage.IncidentSettings,error)
-	UpdateIncidentSettings(context.Context,storage.IncidentSettings)(storage.IncidentSettings,error)
+	GetIncidentSettings(context.Context) (storage.IncidentSettings, error)
+	UpdateIncidentSettings(context.Context, storage.IncidentSettings) (storage.IncidentSettings, error)
 }
 
 func incidentQuery(r *http.Request) (storage.IncidentQuery, error) {
@@ -91,10 +91,16 @@ func (h *Handler) incidents(w http.ResponseWriter, r *http.Request) {
 			}
 			jsonResponse(w, http.StatusOK, page)
 		case "/api/web/incidents/settings":
-			if r.URL.RawQuery!="" {fail(w,http.StatusBadRequest,"invalid_query");return}
-			settings,err:=store.GetIncidentSettings(ctx)
-			if err!=nil {h.incidentError(w,err);return}
-			jsonResponse(w,http.StatusOK,settings)
+			if r.URL.RawQuery != "" {
+				fail(w, http.StatusBadRequest, "invalid_query")
+				return
+			}
+			settings, err := store.GetIncidentSettings(ctx)
+			if err != nil {
+				h.incidentError(w, err)
+				return
+			}
+			jsonResponse(w, http.StatusOK, settings)
 		case "/api/web/incidents/events":
 			q := r.URL.Query()
 			if len(q) != 1 || len(q["id"]) != 1 || !identity.ValidID(q.Get("id")) {
@@ -138,21 +144,26 @@ func (h *Handler) incidents(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/api/web/incidents/settings":
 		var input struct {
-			CooldownSeconds int `json:"cooldown_seconds"`
+			CooldownSeconds      int `json:"cooldown_seconds"`
 			EscalateAfterSeconds int `json:"escalate_after_seconds"`
 		}
-		if !readRuleJSON(w,r,&input) {return}
-		if input.CooldownSeconds<0 || input.CooldownSeconds>86400 ||
-			input.EscalateAfterSeconds<60 || input.EscalateAfterSeconds>604800 {
-			fail(w,http.StatusBadRequest,"invalid_policy")
+		if !readRuleJSON(w, r, &input) {
 			return
 		}
-		settings,err:=store.UpdateIncidentSettings(ctx,storage.IncidentSettings{
-			CooldownSeconds:input.CooldownSeconds,EscalateAfterSeconds:input.EscalateAfterSeconds})
-		if err!=nil {h.incidentError(w,err);return}
-		h.logger.Info("incident policy updated","actor",actor,"cooldown_seconds",
-			settings.CooldownSeconds,"escalate_after_seconds",settings.EscalateAfterSeconds)
-		jsonResponse(w,http.StatusOK,settings)
+		if input.CooldownSeconds < 0 || input.CooldownSeconds > 86400 ||
+			input.EscalateAfterSeconds < 60 || input.EscalateAfterSeconds > 604800 {
+			fail(w, http.StatusBadRequest, "invalid_policy")
+			return
+		}
+		settings, err := store.UpdateIncidentSettings(ctx, storage.IncidentSettings{
+			CooldownSeconds: input.CooldownSeconds, EscalateAfterSeconds: input.EscalateAfterSeconds})
+		if err != nil {
+			h.incidentError(w, err)
+			return
+		}
+		h.logger.Info("incident policy updated", "actor", actor, "cooldown_seconds",
+			settings.CooldownSeconds, "escalate_after_seconds", settings.EscalateAfterSeconds)
+		jsonResponse(w, http.StatusOK, settings)
 	case "/api/web/incidents/evaluate":
 		var input struct {
 			AgentID      string `json:"agent_id"`
