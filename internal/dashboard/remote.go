@@ -161,7 +161,7 @@ func (h *Handler) remoteLogin(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&body) != nil || decoder.Decode(new(any)) != io.EOF ||
-		len(body.Token) > 4096 || len(body.Username) > 32 {
+		len(body.Token) > 72 || len(body.Username) > 32 {
 		fail(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
