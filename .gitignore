@@ -14,3 +14,9 @@ agents.json
 
 # Optional project-local disk spool (prefer user configuration directory)
 .aegis-spool/
+
+# Browser dashboard artifacts
+web/node_modules/
+web/dist/
+web/coverage/
+web/.vite/

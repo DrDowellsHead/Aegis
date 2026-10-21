@@ -1,0 +1,249 @@
+openapi: 3.1.0
+info:
+  title: Aegis read-only history API
+  version: 1.0.0
+  description: |
+    Contract for existing Go history endpoints. This API is bound to
+    loopback and uses an operator Bearer token; it is NOT safe to call
+    from browser JavaScript or expose directly to the internet.
+servers:
+  - url: http://127.0.0.1:8081
+    description: Loopback only, NOT a public browser server
+security:
+  - operatorBearer: []
+paths:
+  /api/v1/agents:
+    get:
+      operationId: listAgents
+      summary: List registered agents and last authenticated contact
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 100}
+        - name: cursor
+          in: query
+          description: Last UUID of the previous page
+          schema: {type: string, format: uuid}
+        - name: offline_after
+          in: query
+          description: Duration from 10s to 24h, whole seconds
+          schema: {type: string, default: 1m}
+      responses:
+        '200':
+          description: Registered agents only
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/measurements:
+    get:
+      operationId: listMeasurements
+      summary: Query raw measurement history by agent
+      parameters:
+        - name: agent_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: from
+          in: query
+          description: Inclusive RFC3339 timestamp
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          description: Exclusive RFC3339 timestamp
+          schema: {type: string, format: date-time}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: cursor
+          in: query
+          description: Opaque cursor bound to agent and time filters
+          schema: {type: string, maxLength: 1024}
+      responses:
+        '200':
+          description: Descending time + measurement ID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MeasurementPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/series:
+    get:
+      operationId: listSeries
+      summary: Aggregate measurements into fixed UTC buckets
+      parameters:
+        - name: agent_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: from
+          in: query
+          required: true
+          description: Inclusive RFC3339 timestamp
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          required: true
+          description: Exclusive RFC3339 timestamp
+          schema: {type: string, format: date-time}
+        - name: step
+          in: query
+          required: true
+          description: Max 90 days and 500 bins
+          schema: {type: string, enum: [1m, 5m, 15m, 1h, 6h, 24h]}
+        - name: disk_path
+          in: query
+          description: Exact disk path; omission means disk averages are null
+          schema: {type: string, maxLength: 1024}
+      responses:
+        '200':
+          description: Populated buckets only, ascending time
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Series'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    operatorBearer:
+      type: http
+      scheme: bearer
+      description: Confidential SERVER-SIDE operator credential, never browser JS
+  responses:
+    BadRequest:
+      description: Invalid or duplicate query parameter
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Missing or invalid Bearer credential
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unavailable:
+      description: Database query failure
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
+    Agent:
+      type: object
+      required: [agent_id, status, registered_at, last_contact_at, last_sample_at]
+      properties:
+        agent_id: {type: string, format: uuid}
+        status: {type: string, enum: [online, offline, unknown]}
+        registered_at: {type: string, format: date-time}
+        last_contact_at: {type: [string, 'null'], format: date-time}
+        last_sample_at: {type: [string, 'null'], format: date-time}
+        os: {type: string, description: Omitted if empty}
+        arch: {type: string, description: Omitted if empty}
+    AgentPage:
+      type: object
+      required: [items, has_more, offline_after]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Agent'}
+        has_more: {type: boolean}
+        next_cursor: {type: string}
+        offline_after: {type: string}
+    CPU:
+      type: object
+      required: [used_percent]
+      properties:
+        used_percent: {type: number}
+    Memory:
+      type: object
+      required: [total_bytes, available_bytes, used_bytes, used_percent]
+      properties:
+        total_bytes: {type: integer, minimum: 0}
+        available_bytes: {type: integer, minimum: 0}
+        used_bytes: {type: integer, minimum: 0}
+        used_percent: {type: number}
+    Disk:
+      type: object
+      required: [path, total_bytes, free_bytes, used_bytes, used_percent]
+      properties:
+        path: {type: string}
+        total_bytes: {type: integer, minimum: 0}
+        free_bytes: {type: integer, minimum: 0}
+        used_bytes: {type: integer, minimum: 0}
+        used_percent: {type: number}
+    NetworkInterface:
+      type: object
+      required: [name, bytes_sent, bytes_received]
+      properties:
+        name: {type: string}
+        bytes_sent: {type: integer, minimum: 0}
+        bytes_received: {type: integer, minimum: 0}
+    Snapshot:
+      type: object
+      required: [schema_version, started_at, duration_ms, os, arch, cpu, memory, disk, network]
+      properties:
+        schema_version: {type: integer}
+        started_at: {type: string, format: date-time}
+        duration_ms: {type: integer}
+        os: {type: string}
+        arch: {type: string}
+        cpu: {oneOf: [{$ref: '#/components/schemas/CPU'}, {type: 'null'}]}
+        memory: {oneOf: [{$ref: '#/components/schemas/Memory'}, {type: 'null'}]}
+        disk: {oneOf: [{$ref: '#/components/schemas/Disk'}, {type: 'null'}]}
+        network:
+          type: [array, 'null']
+          items: {$ref: '#/components/schemas/NetworkInterface'}
+        errors:
+          type: object
+          additionalProperties: {type: string}
+    Measurement:
+      type: object
+      required: [agent_id, measurement_id, started_at, received_at, snapshot]
+      properties:
+        agent_id: {type: string, format: uuid}
+        measurement_id: {type: string}
+        started_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        snapshot: {$ref: '#/components/schemas/Snapshot'}
+    MeasurementPage:
+      type: object
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Measurement'}
+        has_more: {type: boolean}
+        next_cursor: {type: string}
+    SeriesPoint:
+      type: object
+      required: [at, samples, cpu_samples, cpu_avg, cpu_min, cpu_max, memory_samples, memory_avg, disk_samples, disk_avg]
+      properties:
+        at: {type: string, format: date-time}
+        samples: {type: integer, minimum: 0}
+        cpu_samples: {type: integer, minimum: 0}
+        cpu_avg: {type: [number, 'null']}
+        cpu_min: {type: [number, 'null']}
+        cpu_max: {type: [number, 'null']}
+        memory_samples: {type: integer, minimum: 0}
+        memory_avg: {type: [number, 'null']}
+        disk_samples: {type: integer, minimum: 0}
+        disk_avg: {type: [number, 'null']}
+    Series:
+      type: object
+      required: [agent_id, from, to, step, points]
+      properties:
+        agent_id: {type: string, format: uuid}
+        from: {type: string, format: date-time}
+        to: {type: string, format: date-time}
+        step: {type: string, description: Go duration string, e.g. 5m0s}
+        disk_path: {type: string, description: Omitted if empty}
+        points:
+          type: array
+          items: {$ref: '#/components/schemas/SeriesPoint'}
