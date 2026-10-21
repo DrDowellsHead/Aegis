@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -60,6 +59,7 @@ func TestOfflineCooldownAndEscalationPostgres(t *testing.T) {
 	// Pass the cooldown by adjusting persisted resolution time. A new
 	// episode must be allowed, with a fresh UUID and fresh severity.
 	_,err=db.db.ExecContext(ctx,`UPDATE aegis_incidents SET
+		opened_at=clock_timestamp()-interval '10 minutes',
 		resolved_at=clock_timestamp()-interval '6 minutes'
 		WHERE id=$1`,open[0].ID)
 	if err!=nil {t.Fatal(err)}
@@ -130,4 +130,3 @@ func TestIncidentPolicyUpdatePostgres(t *testing.T) {
 	}
 }
 
-var _ = errors.Is
