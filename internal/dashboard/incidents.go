@@ -42,11 +42,8 @@ func incidentQuery(r *http.Request) (storage.IncidentQuery, error) {
 		}
 		q.Limit = number
 	}
-	if q.Limit < 1 || q.Limit > 100 ||
-		(q.State != "active" && q.State != "all" && q.State != "resolved") ||
-		(q.AgentID != "" && !identity.ValidID(q.AgentID)) ||
-		len(q.Cursor) > 160 {
-		return q, fmt.Errorf("invalid incident filters")
+	if err := storage.ValidateIncidentQuery(q); err != nil {
+		return q, err
 	}
 	return q, nil
 }
