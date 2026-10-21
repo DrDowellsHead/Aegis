@@ -7,9 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"net"
 	"os"
-	"strings"
+	"path/filepath"
 	"time"
 )
 
@@ -210,6 +209,9 @@ func MergeTrustBundles(currentPath, nextPath, destination string) (int, error) {
 		seen[id] = struct{}{}
 		body = append(body, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})...)
 	}
+	if len(seen) > maxCACertificates {
+		return 0, fmt.Errorf("too many CA certificates in merged bundle")
+	}
 	if len(body) > maxCABundleSize {
 		return 0, fmt.Errorf("merged CA bundle exceeds maximum size")
 	}
@@ -217,4 +219,12 @@ func MergeTrustBundles(currentPath, nextPath, destination string) (int, error) {
 		return 0, fmt.Errorf("create new trust bundle: %w", err)
 	}
 	return len(seen), nil
+}
+
+func sameAbsolutePath(a, b string) (bool, error) {
+	first, err := filepath.Abs(a)
+	if err != nil { return false, err }
+	second, err := filepath.Abs(b)
+	if err != nil { return false, err }
+	return first == second, nil
 }
