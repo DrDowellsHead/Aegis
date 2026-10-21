@@ -183,6 +183,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/api/web/activity":
 		h.activity(w, r)
 		return
+	case "/api/web/watch/status":
+		h.watchStatus(w, r)
+		return
 	case "/api/web/notifications/stats":
 		h.notificationSummary(w, r)
 		return
