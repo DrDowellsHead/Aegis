@@ -3,8 +3,6 @@ package dashboard
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/DrDowellsHead/Aegis/internal/identity"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -289,30 +289,15 @@ func sortAccounts(users []map[string]any) {
 	}
 }
 
-// CheckServerCertificate parses the certificate early; client-side hostname
-// verification still remains mandatory for anyone connecting to the server.
+// CheckServerCertificate verifies a usable TLS server leaf and its SAN.
+// The trust chain is optional for public-CA deployments; use
+// CheckServerCertificateWithCA to explicitly pin a CA bundle.
 func CheckServerCertificate(certPath, keyPath, publicOrigin string) error {
-	if _, err := validatePublicOrigin(publicOrigin); err != nil {
-		return err
-	}
-	pair, err := tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil {
-		return fmt.Errorf("load dashboard TLS certificate: %w", err)
-	}
-	if len(pair.Certificate) == 0 {
-		return fmt.Errorf("empty dashboard TLS certificate")
-	}
-	cert, err := x509.ParseCertificate(pair.Certificate[0])
-	if err != nil {
-		return fmt.Errorf("parse dashboard TLS certificate: %w", err)
-	}
-	u, _ := url.Parse(publicOrigin)
-	if err := cert.VerifyHostname(u.Hostname()); err != nil {
-		return fmt.Errorf("dashboard certificate does not match public origin host: %w", err)
-	}
-	now := time.Now()
-	if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
-		return fmt.Errorf("dashboard TLS certificate is not currently valid")
-	}
-	return nil
+	return CheckServerCertificateWithCA(certPath,keyPath,"",publicOrigin)
+}
+func CheckServerCertificateWithCA(certPath,keyPath,caPath,publicOrigin string) error {
+	if _,err:=validatePublicOrigin(publicOrigin);err!=nil{return err}
+	u,_:=url.Parse(publicOrigin)
+	_,err:=identity.ValidateServerCertificate(certPath,keyPath,caPath,u.Hostname(),0)
+	return err
 }
