@@ -15,6 +15,15 @@ export interface Incident {
   acknowledged_by: string | null
   resolved_at: string | null
   resolution: string | null
+  severity: 'warning' | 'critical'
+  escalated_at: string | null
+  suppressed_checks: number
+  last_suppressed_at: string | null
+}
+export interface IncidentSettings {
+  cooldown_seconds: number
+  escalate_after_seconds: number
+  updated_at: string
 }
 export interface IncidentPage {
   items: Incident[]
@@ -22,7 +31,7 @@ export interface IncidentPage {
   next_cursor?: string
 }
 export interface IncidentEvent {
-  action: 'opened' | 'acknowledged' | 'resolved'
+  action: 'opened' | 'acknowledged' | 'resolved' | 'escalated'
   actor: string
   at: string
   reason: string
@@ -42,7 +51,11 @@ function readIncident(raw: unknown): Incident {
       !['open', 'acknowledged', 'resolved'].includes(String(v.state)) ||
       typeof v.opened_at !== 'string' ||
       !optionalString(v.acknowledged_at) || !optionalString(v.acknowledged_by) ||
-      !optionalString(v.resolved_at) || !optionalString(v.resolution)) {
+      !optionalString(v.resolved_at) || !optionalString(v.resolution) ||
+      !['warning','critical'].includes(String(v.severity)) ||
+      !optionalString(v.escalated_at) ||
+      typeof v.suppressed_checks !== 'number' ||
+      !optionalString(v.last_suppressed_at)) {
     throw new Error('Invalid incident response')
   }
   return v as unknown as Incident
@@ -65,7 +78,7 @@ export async function loadIncidentEvents(id: string): Promise<IncidentEvent[]> {
   if (!Array.isArray(v.items) || v.items.length > 100) throw new Error('Invalid incident events')
   return v.items.map(raw => {
     const e = obj(raw)
-    if (!['opened', 'acknowledged', 'resolved'].includes(String(e.action)) ||
+    if (!['opened', 'acknowledged', 'resolved', 'escalated'].includes(String(e.action)) ||
       typeof e.actor !== 'string' || typeof e.at !== 'string' || typeof e.reason !== 'string') {
       throw new Error('Invalid incident event')
     }
@@ -87,4 +100,24 @@ export async function evaluateLiveness(agentID: string, offlineAfter: string): P
     throw new Error('Invalid liveness status')
   }
   return String(v.status)
+}
+
+function readSettings(raw:unknown): IncidentSettings {
+  const r=obj(raw)
+  if (!Number.isInteger(r.cooldown_seconds) ||
+      !Number.isInteger(r.escalate_after_seconds) ||
+      typeof r.updated_at!=='string') throw new Error('Invalid incident settings')
+  return r as unknown as IncidentSettings
+}
+export async function getIncidentSettings(): Promise<IncidentSettings> {
+  return readSettings(await requestJSON('/api/web/incidents/settings'))
+}
+export async function updateIncidentSettings(cooldownSeconds:number,
+  escalateAfterSeconds:number): Promise<IncidentSettings> {
+  return readSettings(await requestJSON('/api/web/incidents/settings', {
+    method: 'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      cooldown_seconds:cooldownSeconds,escalate_after_seconds:escalateAfterSeconds
+    })
+  }))
 }
