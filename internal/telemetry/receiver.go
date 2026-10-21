@@ -36,6 +36,7 @@ type Receiver struct {
 	logger   *slog.Logger
 	registry identity.Registry
 	store    MeasurementStore
+	admission *receiverAdmission
 }
 
 func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendResponse, error) {
@@ -51,6 +52,11 @@ func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendRespo
 		!r.registry.Authenticate(req.GetAgentId(), strings.TrimPrefix(auth[0], "Bearer ")) {
 		return nil, status.Error(codes.Unauthenticated, "invalid agent credentials")
 	}
+	release, admissionErr := r.admission.takeMeasurement(ctx, req.GetAgentId())
+	if admissionErr != nil {
+		return nil, admissionErr
+	}
+	defer release()
 	if !validMeasurementID(req.GetMeasurementId()) {
 		return nil, status.Error(codes.InvalidArgument, "measurement_id must be 32 lowercase hex digits")
 	}
@@ -89,6 +95,11 @@ func (r *Receiver) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb
 		!r.registry.Authenticate(req.GetAgentId(), strings.TrimPrefix(auth[0], "Bearer ")) {
 		return nil, status.Error(codes.Unauthenticated, "invalid agent credentials")
 	}
+	release, admissionErr := r.admission.takeHeartbeat(ctx)
+	if admissionErr != nil {
+		return nil, admissionErr
+	}
+	defer release()
 	store, ok := r.store.(HeartbeatRecorder)
 	if !ok {
 		return nil, status.Error(codes.Unavailable, "heartbeat storage unavailable")
@@ -116,17 +127,29 @@ func validMeasurementID(id string) bool {
 }
 
 func ServeReceiver(ctx context.Context, listener net.Listener, logger *slog.Logger, transport credentials.TransportCredentials, registry identity.Registry, store MeasurementStore) error {
+	return ServeReceiverWithLimits(ctx, listener, logger, transport, registry, store, DefaultReceiverLimits())
+}
+
+// ServeReceiverWithLimits bounds all active telemetry writes across connections,
+// not just each HTTP/2 connection's grpc.MaxConcurrentStreams setting.
+func ServeReceiverWithLimits(ctx context.Context, listener net.Listener, logger *slog.Logger, transport credentials.TransportCredentials, registry identity.Registry, store MeasurementStore, limits ReceiverLimits) error {
 	if listener == nil || logger == nil || transport == nil || store == nil {
 		if listener != nil {
 			_ = listener.Close()
 		}
 		return fmt.Errorf("listener, logger, TLS credentials and store are required")
 	}
+	if err := limits.Validate(); err != nil {
+		_ = listener.Close()
+		return fmt.Errorf("invalid receiver resource limits: %w", err)
+	}
 	server := grpc.NewServer(grpc.Creds(transport), grpc.MaxRecvMsgSize(1<<20), grpc.MaxConcurrentStreams(64))
-	pb.RegisterTelemetryServiceServer(server, &Receiver{logger: logger, registry: registry, store: store})
+	pb.RegisterTelemetryServiceServer(server, &Receiver{logger: logger, registry: registry, store: store, admission: newReceiverAdmission(limits)})
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
-	logger.Info("authenticated database-backed TLS receiver started", "address", listener.Addr().String())
+	logger.Info("authenticated database-backed TLS receiver started", "address", listener.Addr().String(),
+		"max_inflight_samples", limits.Measurements, "max_inflight_heartbeats", limits.Heartbeats,
+		"max_per_agent_samples", limits.PerAgent)
 	select {
 	case err := <-done:
 		return err

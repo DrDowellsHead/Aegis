@@ -77,6 +77,9 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	certHost := flags.String("tls-host", "", "optional expected server certificate DNS name or IP SAN")
 	certCA := flags.String("tls-ca-cert", "", "optional explicit CA PEM to validate server certificate chain")
 	registryPath := flags.String("agents-file", "", "registry of authorized agents")
+	maxSamples := flags.Int("max-inflight-samples", 8, "global concurrent measurement requests (1..64)")
+	maxHeartbeats := flags.Int("max-inflight-heartbeats", 2, "separate concurrent heartbeat requests (1..16)")
+	maxPerAgent := flags.Int("max-per-agent-samples", 2, "concurrent measurement requests per agent (1..8)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -89,6 +92,11 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	}
 	if *certCA != "" && *certHost == "" {
 		fmt.Fprintln(errOut, "--tls-ca-cert requires --tls-host so the complete chain and SAN can be checked")
+		return 2
+	}
+	limits := telemetry.ReceiverLimits{Measurements: *maxSamples, Heartbeats: *maxHeartbeats, PerAgent: *maxPerAgent}
+	if err := limits.Validate(); err != nil {
+		fmt.Fprintln(errOut, "receiver limits:", err)
 		return 2
 	}
 	transport, err := telemetry.ServerCredentialsForHost(*cert, *key, *certCA, *certHost)
@@ -125,7 +133,7 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 		return 1
 	}
 	logger := slog.New(slog.NewJSONHandler(errOut, nil))
-	if err := telemetry.ServeReceiver(ctx, listener, logger, transport, registry, db); err != nil {
+	if err := telemetry.ServeReceiverWithLimits(ctx, listener, logger, transport, registry, db, limits); err != nil {
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
