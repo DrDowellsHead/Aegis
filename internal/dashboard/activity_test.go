@@ -55,7 +55,8 @@ func TestActivityReadOnlyAuthorizationAndFilters(t *testing.T) {
 }
 
 func TestActivityRejectsBadFiltersAndRedactsErrors(t *testing.T) {
-	h, cookie := testDashboard(t)
+	h, _ := testDashboard(t)
+	cookie := login(t, h)
 	store := &activityFake{stub: &stub{}}
 	h.reader = store
 	for _, path := range []string{
