@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import SecurityAuditPanel from './SecurityAuditPanel'
 import {
   ApiError, loadDashboardUsers, revokeDashboardSessions,
   type DashboardUser, type DashboardSession
@@ -80,5 +81,7 @@ export default function AdminSettings({ session, onExpired }: Props) {
             </>}
         </>}
     </section>
+    {session.mode === 'remote' && session.role === 'admin' &&
+      <SecurityAuditPanel onExpired={onExpired} />}
   </div>
 }
