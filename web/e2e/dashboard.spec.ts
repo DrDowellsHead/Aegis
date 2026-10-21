@@ -370,7 +370,7 @@ test('journal is searchable and accessible to viewers without mutation controls'
   await page.goto('/activity')
   await expect(page.getByRole('heading', { name: 'Журнал событий' })).toBeVisible()
   await expect(page.getByText('CPU high')).toBeVisible()
-  await expect(page.getByText('Открытие')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Открытие' })).toBeVisible()
   await page.getByLabel('Категория').selectOption('incident')
   await page.getByLabel('Оператор или система').fill('operator')
   await page.getByRole('button', { name: 'Искать' }).click()
