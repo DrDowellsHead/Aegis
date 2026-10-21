@@ -17,17 +17,25 @@ func TestAgentTokenCLI(t *testing.T) {
 	oldPath := filepath.Join(dir, "old.json")
 	replacementPath := filepath.Join(dir, "new.json")
 	id, err := identity.Provision(registry, oldPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	old, err := identity.LoadCredentials(oldPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var out, stderr bytes.Buffer
 	code := Run(context.Background(), []string{"agent-token", "rotate",
 		"--agents-file", registry, "--agent-id", id,
 		"--credentials", replacementPath}, &out, &stderr, "test")
-	if code != 0 { t.Fatalf("rotate returned %d: %s", code, stderr.String()) }
+	if code != 0 {
+		t.Fatalf("rotate returned %d: %s", code, stderr.String())
+	}
 	newCreds, err := identity.LoadCredentials(replacementPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, secret := range []string{old.Token, newCreds.Token} {
 		if strings.Contains(out.String(), secret) || strings.Contains(stderr.String(), secret) {
 			t.Fatal("CLI printed agent bearer token")
@@ -40,7 +48,9 @@ func TestAgentTokenCLI(t *testing.T) {
 	stderr.Reset()
 	code = Run(context.Background(), []string{"agent-token", "revoke",
 		"--agents-file", registry, "--agent-id", id}, &out, &stderr, "test")
-	if code != 0 { t.Fatalf("revoke returned %d: %s", code, stderr.String()) }
+	if code != 0 {
+		t.Fatalf("revoke returned %d: %s", code, stderr.String())
+	}
 	reg, err := identity.LoadRegistry(registry)
 	if err != nil || reg.Authenticate(id, newCreds.Token) {
 		t.Fatal("revoked bearer token still validates")

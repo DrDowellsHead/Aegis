@@ -16,23 +16,37 @@ func TestRotateAndRevokeAgentToken(t *testing.T) {
 	newClient := filepath.Join(dir, "replacement.json")
 
 	id, err := Provision(registryPath, oldClient)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	other, err := Provision(registryPath, otherClient)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	oldCredentials, err := LoadCredentials(oldClient)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	otherCredentials, err := LoadCredentials(otherClient)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if err := RotateToken(registryPath, newClient, id); err != nil { t.Fatal(err) }
+	if err := RotateToken(registryPath, newClient, id); err != nil {
+		t.Fatal(err)
+	}
 	replacement, err := LoadCredentials(newClient)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if replacement.AgentID != id || replacement.Token == oldCredentials.Token ||
 		!validToken(replacement.Token) {
 		t.Fatal("rotation did not preserve identity or generate fresh token")
 	}
 	registry, err := LoadRegistry(registryPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if registry.Authenticate(id, oldCredentials.Token) ||
 		!registry.Authenticate(id, replacement.Token) ||
 		!registry.Authenticate(other, otherCredentials.Token) {
@@ -43,14 +57,20 @@ func TestRotateAndRevokeAgentToken(t *testing.T) {
 	}
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(newClient)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		if info.Mode().Perm() != 0600 {
 			t.Fatalf("replacement token should be private: %v", info.Mode())
 		}
 	}
-	if err := RevokeAgent(registryPath, id); err != nil { t.Fatal(err) }
+	if err := RevokeAgent(registryPath, id); err != nil {
+		t.Fatal(err)
+	}
 	registry, err = LoadRegistry(registryPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if registry.Authenticate(id, replacement.Token) ||
 		registry.Authenticate(id, oldCredentials.Token) ||
 		!registry.Authenticate(other, otherCredentials.Token) {
@@ -69,9 +89,13 @@ func TestAgentTokenRotationFailClosed(t *testing.T) {
 	registryPath := filepath.Join(dir, "registry.json")
 	oldClient := filepath.Join(dir, "old.json")
 	id, err := Provision(registryPath, oldClient)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	original, err := LoadCredentials(oldClient)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The new credentials path must be new and must not overlap the registry.
 	for _, badPath := range []string{registryPath, oldClient} {
@@ -105,7 +129,6 @@ func TestAgentTokenRotationFailClosed(t *testing.T) {
 		t.Fatal("failed rotation unexpectedly revoked original token")
 	}
 
-
 }
 
 func TestRotationDoesNotExposeSecretsInErrors(t *testing.T) {
@@ -113,9 +136,13 @@ func TestRotationDoesNotExposeSecretsInErrors(t *testing.T) {
 	registryPath := filepath.Join(dir, "agents.json")
 	old := filepath.Join(dir, "old.json")
 	id, err := Provision(registryPath, old)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	oldCredentials, err := LoadCredentials(old)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := RotateToken(registryPath, old, id); err == nil ||
 		strings.Contains(err.Error(), oldCredentials.Token) {
 		t.Fatal("rotation error leaked token or allowed overwrite")
