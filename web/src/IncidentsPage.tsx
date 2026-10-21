@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from './api/client'
+import { getWatchStatus, type WatchStatus } from './api/watch'
 import {
   loadIncidents, changeIncident, evaluateLiveness, loadIncidentEvents,
   getIncidentSettings, updateIncidentSettings, getNotificationStats, type NotificationStats,
@@ -40,6 +41,7 @@ export default function IncidentsPage({ canManage, onExpired }: {
   const [escalation,setEscalation]=useState('900')
   const [settingsReady,setSettingsReady]=useState(false)
   const [delivery,setDelivery]=useState<NotificationStats|null>(null)
+  const [watchStatus,setWatchStatus]=useState<WatchStatus|null>(null)
 
   const fail=useCallback((cause: unknown)=>{
     if (cause instanceof ApiError && cause.status===401) {onExpired();return}
@@ -50,6 +52,16 @@ export default function IncidentsPage({ canManage, onExpired }: {
       setError('Инцидент или зарегистрированный агент не найден.')
     } else setError('Не удалось выполнить запрос. Проверьте соединение с Go и PostgreSQL.')
   },[onExpired])
+
+  useEffect(()=>{
+    const controller=new AbortController()
+    getWatchStatus(controller.signal).then(result=>{
+      if(!controller.signal.aborted)setWatchStatus(result)
+    }).catch(cause=>{
+      if(!controller.signal.aborted)fail(cause)
+    })
+    return ()=>controller.abort()
+  },[refresh,fail])
 
   useEffect(()=>{
     let cancelled=false
@@ -184,6 +196,24 @@ export default function IncidentsPage({ canManage, onExpired }: {
           onChange={e=>setEscalation(e.target.value)}/>
         {canManage && <button type="submit" disabled={busy}>Сохранить политику</button>}
       </form>}
+    </section>
+    <section className="panel" aria-label="Автоматические проверки">
+      <div className="panel-heading"><h2>Автоматические проверки</h2></div>
+      {!watchStatus ? <p className="muted">Состояние планировщика недоступно.</p> :
+        <div>
+          <p role="status"><strong>{watchStatus.state==='never' ? 'Не запускался' :
+            watchStatus.stale ? 'Нет свежих данных от планировщика' :
+            watchStatus.state==='running' ? 'Проверка выполняется' :
+            watchStatus.state==='ok' ? 'Последняя проверка успешна' :
+            'Обнаружены ошибки проверки'}</strong></p>
+          <p className="muted">Проверено агентов: {watchStatus.agents_checked};
+            правил: {watchStatus.rules_checked}; ошибок: {watchStatus.errors}.</p>
+          <p className="muted">Интервал: {watchStatus.interval_seconds} сек.;
+            Offline через: {watchStatus.offline_after_seconds} сек.</p>
+          <p className="muted">Последняя успешная проверка: {dateLabel(watchStatus.last_success_at)}.
+            Последняя активность: {dateLabel(watchStatus.progress_at)}.</p>
+          {watchStatus.stale && <p className="form-error">Для автономного мониторинга запустите на сервере процесс <code>aegis watch</code>.</p>}
+        </div>}
     </section>
     <section className="panel" aria-label="Доставка уведомлений">
       <div className="panel-heading"><h2>Очередь уведомлений</h2></div>
