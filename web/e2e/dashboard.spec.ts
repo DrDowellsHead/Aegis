@@ -54,6 +54,9 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
       await respond(200, { revoked: 1 }); return
     }
 
+    if (name === '/api/web/notifications/stats') {
+      await respond(200, { pending: 3, retry: 1, leased: 0, sent: 7, dead: 0 }); return
+    }
     if (name === '/api/web/incidents/settings') {
       if (request.method() === 'POST' && state.role !== 'admin') {
         await respond(403, { error: 'forbidden' }); return
@@ -344,4 +347,11 @@ test('viewer sees policy values but cannot edit the incident policy', async ({ p
   await page.goto('/incidents')
   await expect(page.getByLabel('Cooldown (сек., 0 — отключён)')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Сохранить политику' })).toHaveCount(0)
+})
+
+test('incident page displays aggregate delivery stats without secret data', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/incidents')
+  await expect(page.getByLabel('Доставка уведомлений')).toBeVisible()
+  await expect(page.getByText('Ожидают: 3', { exact: false })).toBeVisible()
 })
