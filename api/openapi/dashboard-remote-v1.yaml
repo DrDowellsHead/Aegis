@@ -1,0 +1,135 @@
+openapi: 3.1.0
+info:
+  title: Aegis HTTPS dashboard API
+  version: 1.0.0
+  description: |
+    Direct TLS 1.3 gateway from Aegis step 4.6. Reuses authenticated
+    metrics read endpoints from dashboard-local-v1.yaml. All operator
+    cookies are Secure, HttpOnly and SameSite=Strict. Host must equal
+    --public-origin; all POSTs require exact Origin and same-site fetch.
+servers:
+  - url: https://monitor.example.com:8443
+security:
+  - dashboardSession: []
+paths:
+  /api/web/session:
+    get:
+      security: []
+      summary: Session status and current user identity
+      responses:
+        '200':
+          description: Current HTTPS session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authenticated, mode]
+                properties:
+                  authenticated: {type: boolean}
+                  mode: {type: string, const: remote}
+                  username: {type: string}
+                  role: {type: string, enum: [admin, viewer]}
+  /api/web/login:
+    post:
+      security: []
+      summary: Exchange operator username and password for an opaque session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, token]
+              properties:
+                username: {type: string, minLength: 3, maxLength: 32}
+                token: {type: string, minLength: 16, maxLength: 72, description: Password, not an agent token}
+      responses:
+        '200': {description: Authenticated, Secure HttpOnly cookie}
+        '400': {description: Malformed request}
+        '401': {description: Wrong credentials}
+        '403': {description: Cross-origin request}
+        '429': {description: Rate limited}
+  /api/web/logout:
+    post:
+      summary: Revoke current session
+      responses:
+        '200': {description: Session invalidated}
+        '403': {description: Invalid Origin}
+  /api/web/admin/users:
+    get:
+      summary: Names and roles (admin only, no hashes)
+      responses:
+        '200':
+          description: Operator listing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [username, role]
+                      properties:
+                        username: {type: string}
+                        role: {type: string, enum: [admin, viewer]}
+        '401': {description: Not logged in}
+        '403': {description: Viewer role denied}
+  /api/web/admin/sessions/revoke:
+    post:
+      summary: Revoke all sessions of a named account (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: {type: string}
+      responses:
+        '200':
+          description: Count of removed sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revoked]
+                properties:
+                  revoked: {type: integer, minimum: 0}
+        '401': {description: Not logged in}
+        '403': {description: Viewer role denied or invalid Origin}
+        '404': {description: Unknown account}
+  /api/web/agents:
+    get:
+      summary: All agent statuses (admin or viewer)
+      description: Same query and result as dashboard-local-v1.yaml
+      responses:
+        '200': {description: Paginated agent list}
+        '401': {description: Not logged in}
+  /api/web/summary:
+    get:
+      summary: Fleet status summary (admin or viewer)
+      responses:
+        '200': {description: Counts grouped by status}
+        '401': {description: Not logged in}
+  /api/web/series:
+    get:
+      summary: Metric time-series (admin or viewer)
+      responses:
+        '200': {description: SeriesResult from history API}
+        '401': {description: Not logged in}
+  /api/web/measurements:
+    get:
+      summary: Raw measurement history (admin or viewer)
+      responses:
+        '200': {description: Cursor-paged history}
+        '401': {description: Not logged in}
+components:
+  securitySchemes:
+    dashboardSession:
+      type: apiKey
+      in: cookie
+      name: aegis_dashboard_session
