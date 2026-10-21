@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -122,7 +123,14 @@ func ParseTrustBundle(data []byte) (*x509.CertPool, []*x509.Certificate, error) 
 	roots := x509.NewCertPool()
 	certs := make([]*x509.Certificate, 0, 2)
 	seen := make(map[string]struct{})
-	for len(data) > 0 {
+	now := time.Now()
+	for len(bytes.TrimSpace(data)) > 0 {
+		data = bytes.TrimSpace(data)
+		// pem.Decode skips arbitrary leading text. Trust anchors must be
+		// strict PEM-only inputs, not partially decoded mixed documents.
+		if !bytes.HasPrefix(data, []byte("-----BEGIN CERTIFICATE-----")) {
+			return nil, nil, fmt.Errorf("CA bundle contains unexpected PEM material")
+		}
 		block, rest := pem.Decode(data)
 		if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
 			return nil, nil, fmt.Errorf("CA bundle contains invalid PEM data")
@@ -136,7 +144,7 @@ func ParseTrustBundle(data []byte) (*x509.CertPool, []*x509.Certificate, error) 
 			cert.KeyUsage&x509.KeyUsageCertSign == 0 {
 			return nil, nil, fmt.Errorf("trust bundle contains a non-CA certificate")
 		}
-		if time.Now().Before(cert.NotBefore) || !time.Now().Before(cert.NotAfter) {
+		if now.Before(cert.NotBefore) || !now.Before(cert.NotAfter) {
 			return nil, nil, fmt.Errorf("trust bundle contains an expired or not-yet-valid CA")
 		}
 		fingerprint := hex.EncodeToString(sha256Sum(cert.Raw))
