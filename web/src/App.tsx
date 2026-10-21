@@ -122,7 +122,9 @@ export default function App() {
   const [agents, setAgents] = useState<AgentPage | null>(null)
   const [loading, setLoading] = useState(false)
   const [dataError, setDataError] = useState('')
-  const onExpired = useCallback(() => { setAuth('anonymous'); setAgents(null); setSummary(null) }, [])
+  const [loadedKey, setLoadedKey] = useState('')
+  const queryKey = offlineAfter + '|' + cursorStack.join('|')
+  const onExpired = useCallback(() => { setAuth('anonymous'); setAgents(null); setSummary(null); setLoadedKey('') }, [])
   const cursor = cursorStack.length ? cursorStack[cursorStack.length - 1] ?? '' : ''
 
   useEffect(() => {
@@ -150,6 +152,7 @@ export default function App() {
       if (controller.signal.aborted) return
       setSummary(nextSummary)
       setAgents(nextAgents)
+      setLoadedKey(queryKey)
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return
       if (error instanceof ApiError && error.status === 401) {
@@ -160,14 +163,21 @@ export default function App() {
       }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [auth, offlineAfter, cursor, refresh])
+  }, [auth, offlineAfter, cursor, queryKey, refresh])
 
   useEffect(() => {
     if (auth !== 'authenticated') return
-    const interval = window.setInterval(() => {
+    const updateIfVisible = () => {
       if (document.visibilityState === 'visible') setRefresh(i => i + 1)
-    }, 30_000)
-    return () => window.clearInterval(interval)
+    }
+    const interval = window.setInterval(updateIfVisible, 30_000)
+    document.addEventListener('visibilitychange', updateIfVisible)
+    window.addEventListener('online', updateIfVisible)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', updateIfVisible)
+      window.removeEventListener('online', updateIfVisible)
+    }
   }, [auth])
 
   async function onLogin(token: string) {
@@ -176,6 +186,7 @@ export default function App() {
       await signIn(token)
       setAuth('authenticated')
       setCursorStack([])
+      setLoadedKey('')
       setRefresh(i => i + 1)
     } catch (error) {
       if (error instanceof ApiError && error.status === 429) {
@@ -191,7 +202,7 @@ export default function App() {
   async function onLogout() {
     try { await signOut() } finally {
       setAuth('anonymous')
-      setAgents(null); setSummary(null); setCursorStack([])
+      setAgents(null); setSummary(null); setCursorStack([]); setLoadedKey('')
     }
   }
   function navigate(e: MouseEvent<HTMLAnchorElement>, href: string) {
@@ -212,14 +223,23 @@ export default function App() {
   }
   if (auth === 'anonymous') return <Login onLogin={onLogin} busy={loginBusy} error={loginError} />
 
-  const listing = agents?.items ?? []
+  const currentPage = loadedKey === queryKey ? agents : null
+  const currentSummary = loadedKey === queryKey ? summary : null
+  const listing = currentPage?.items ?? []
   const title = page === 'agents' ? 'Агенты' : page === 'agent-detail' ? 'Карточка агента' :
     page === 'incidents' ? 'Инциденты' : page === 'settings' ? 'Настройки' : 'Обзор'
 
   function listPanel() {
     return <Panel title="Зарегистрированные агенты" note="Данные PostgreSQL · обновление каждые 30 секунд">
-      {dataError && <div className="data-error" role="alert">{dataError}</div>}
-      {loading && !agents ? <Empty title="Получаем список…" text="Проверяем зарегистрированные устройства." /> :
+      {dataError && <div className="data-error" role="alert">
+        {dataError} {currentPage && 'Показаны последние успешно полученные данные.'}
+        <button type="button" onClick={() => setRefresh(i => i + 1)}
+          disabled={loading}>Повторить</button>
+      </div>
+      {loading && currentPage && <p className="refresh-hint" role="status">
+        Обновляем список, предыдущие данные остаются видимыми…
+      </p>}
+      {loading && !currentPage ? <Empty title="Получаем список…" text="Проверяем зарегистрированные устройства." /> :
         listing.length ? <AgentRows agents={listing} /> :
         <Empty title={dataError ? 'Данные недоступны' : 'Нет зарегистрированных агентов'}
           text={dataError ? 'Используйте кнопку обновления для повтора.' :
@@ -228,8 +248,8 @@ export default function App() {
         <button type="button" disabled={loading || cursorStack.length === 0}
           onClick={() => setCursorStack(a => a.slice(0, -1))}>← Назад</button>
         <span className="muted small">Страница {cursorStack.length + 1}</span>
-        <button type="button" disabled={loading || !agents?.has_more || !agents.next_cursor}
-          onClick={() => { if (agents?.next_cursor) setCursorStack(a => [...a, agents.next_cursor!]) }}>Далее →</button>
+        <button type="button" disabled={loading || !currentPage?.has_more || !currentPage.next_cursor}
+          onClick={() => { if (currentPage?.next_cursor) setCursorStack(a => [...a, currentPage.next_cursor!]) }}>Далее →</button>
       </div>
     </Panel>
   }
@@ -276,16 +296,16 @@ export default function App() {
             <select id="offline-threshold" value={offlineAfter} onChange={e => {
               setOfflineAfter(e.target.value)
               setCursorStack([])
-              setAgents(null); setSummary(null)
+              setDataError('')
             }}>
               <option value="1m">1 минуту</option>
               <option value="5m">5 минут</option>
               <option value="15m">15 минут</option>
               <option value="1h">1 час</option>
             </select>
-            {summary?.checked_at && <span className="muted small">Обновлено: {timeLabel(summary.checked_at)}</span>}
+            {currentSummary?.checked_at && <span className="muted small">Обновлено: {timeLabel(currentSummary.checked_at)}</span>}
           </div>
-          <Stats summary={summary} loading={loading} />
+          <Stats summary={currentSummary} loading={loading} />
           {listPanel()}
         </>}
         {page === 'agent-detail' && <AgentDetail

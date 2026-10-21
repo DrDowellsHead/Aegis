@@ -38,7 +38,18 @@ export default function AgentDetail({ id, refresh, onExpired }: {
   const [seriesLoading, setSeriesLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(true)
   const [seriesError, setSeriesError] = useState('')
+  const [seriesScopeLoaded, setSeriesScopeLoaded] = useState('')
+  const [seriesWindow, setSeriesWindow] = useState<Window | null>(null)
+  const [seriesUpdatedAt, setSeriesUpdatedAt] = useState<string | null>(null)
   const [historyError, setHistoryError] = useState('')
+  const [historyScopeLoaded, setHistoryScopeLoaded] = useState('')
+  const seriesScope = [id, mode, diskPath, String(compare),
+    mode === 'custom' ? window.from : '', mode === 'custom' ? window.to : ''
+  ].join('|')
+  const historyScope = [id, mode,
+    mode === 'custom' ? window.from : '',
+    mode === 'custom' ? window.to : '', cursorStack.join('|')
+  ].join('|')
   const cursor = cursorStack.at(-1) ?? ''
 
   // Parent refresh is also fired by the 30-second timer. Custom fixed
@@ -61,8 +72,7 @@ export default function AgentDetail({ id, refresh, onExpired }: {
     const abort = new AbortController()
     setSeriesLoading(true)
     setSeriesError('')
-    setSeries(null)
-    setPrevious(null)
+
     const previousRange = previousWindow(window)
     Promise.all([
       fetchSeries(id, window, diskPath, abort.signal),
@@ -71,22 +81,25 @@ export default function AgentDetail({ id, refresh, onExpired }: {
       if (abort.signal.aborted) return
       setSeries(main)
       setPrevious(older)
+      setSeriesScopeLoaded(seriesScope)
+      setSeriesWindow(window)
+      setSeriesUpdatedAt(new Date().toISOString())
     }).catch((reason: unknown) => {
       if (abort.signal.aborted) return
       if (reason instanceof ApiError && reason.status === 401) onExpired()
       else setSeriesError('Не удалось загрузить графики. Проверьте подключение к PostgreSQL.')
     }).finally(() => { if (!abort.signal.aborted) setSeriesLoading(false) })
     return () => abort.abort()
-  }, [id, window, diskPath, compare, reload, onExpired])
+  }, [id, window, diskPath, compare, seriesScope, reload, onExpired])
 
   useEffect(() => {
     const abort = new AbortController()
     setHistoryLoading(true)
     setHistoryError('')
-    setHistory(null)
     fetchHistory(id, window, cursor, abort.signal).then(page => {
       if (abort.signal.aborted) return
       setHistory(page)
+      setHistoryScopeLoaded(historyScope)
       // Discover disk path from actual readings; only set an empty selection.
       const found = page.items.find(item => item.snapshot.disk?.path)?.snapshot.disk?.path
       if (found) setDiskPath(current => current || found)
@@ -98,7 +111,7 @@ export default function AgentDetail({ id, refresh, onExpired }: {
     return () => abort.abort()
     // History paging does not need to re-query when disk path changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, window, cursor, reload, onExpired])
+  }, [id, window, cursor, historyScope, reload, onExpired])
 
   function selectPeriod(next: Period) {
     setMode(next)
@@ -126,13 +139,19 @@ export default function AgentDetail({ id, refresh, onExpired }: {
     }
   }
 
-  const rows = history?.items ?? []
+  const shownHistory = historyScopeLoaded === historyScope ? history : null
+  // For a moving preset keep its last good chart visible while refreshing.
+  // For a different agent, selection or custom period show no stale data.
+  const shownSeries = seriesScopeLoaded === seriesScope ? series : null
+  const shownPrevious = seriesScopeLoaded === seriesScope ? previous : null
+  const displayedWindow = shownSeries && seriesWindow ? seriesWindow : window
+  const rows = shownHistory?.items ?? []
   const newest = rows[0]
   const disks = useMemo(() => Array.from(new Set(rows
     .map(item => item.snapshot.disk?.path)
     .filter((path): path is string => Boolean(path)))), [rows])
-  const chartPoints = series?.points ?? []
-  const previousPoints = previous?.points ?? null
+  const chartPoints = shownSeries?.points ?? []
+  const previousPoints = shownPrevious?.points ?? null
   const prev = previousWindow(window)
 
   return <div className="detail-page">
@@ -187,15 +206,26 @@ export default function AgentDetail({ id, refresh, onExpired }: {
         Пунктирные линии совмещены по прошедшему времени, а не по часам на циферблате.</p>}
     </div>
 
-    {seriesError && <div className="data-error" role="alert">{seriesError}</div>}
-    {series && <div className="detail-charts">
+    {seriesError && <div className="data-error" role="alert">
+      {seriesError} {shownSeries && 'Отображены последние успешные показания.'}
+      <button type="button" disabled={seriesLoading || historyLoading}
+        onClick={() => setReload(n => n + 1)}>Повторить</button>
+    </div>}
+    {seriesLoading && shownSeries && <p className="refresh-hint" role="status">
+      Обновляем графики без скрытия предыдущих данных…
+    </p>}
+    {shownSeries && seriesUpdatedAt && <p className="refresh-hint">
+      Данные графиков получены: {formatLocal(seriesUpdatedAt)}.
+      {seriesLoading && ' Обновление выполняется, показан предыдущий успешный интервал.'}
+    </p>}
+    {shownSeries && <div className="detail-charts">
       <Trend title="CPU" note="Загрузка процессора, % (avg / min / max)"
-        current={chartPoints} previous={previousPoints} window={window} lines={cpu}/>
+        current={chartPoints} previous={previousPoints} window={displayedWindow} lines={cpu}/>
       <Trend title="RAM" note="Использовано оперативной памяти, %"
-        current={chartPoints} previous={previousPoints} window={window}
+        current={chartPoints} previous={previousPoints} window={displayedWindow}
         lines={[{ metric: 'memory_avg', label: 'Среднее', color: '#8db9f7' }]}/>
       <Trend title="Диск" note={diskPath ? `Занято, % · ${diskPath}` : 'Выберите путь диска'}
-        current={chartPoints} previous={previousPoints} window={window}
+        current={chartPoints} previous={previousPoints} window={displayedWindow}
         lines={[{ metric: 'disk_avg', label: 'Среднее', color: '#e4b476' }]}/>
     </div>}
     <p className="muted small">Ноль — реальное измерение; отсутствие значения — пропуск.
@@ -206,8 +236,15 @@ export default function AgentDetail({ id, refresh, onExpired }: {
         <h2>Отдельные измерения</h2>
         <span className="muted small">20 записей · новые сверху · фиксированный период</span>
       </div>
-      {historyError && <div className="data-error" role="alert">{historyError}</div>}
-      {history && !rows.length && <p className="muted measurement-note">
+      {historyError && <div className="data-error" role="alert">
+        {historyError} {shownHistory && 'Показаны последние успешно полученные измерения.'}
+        <button type="button" disabled={seriesLoading || historyLoading}
+          onClick={() => setReload(n => n + 1)}>Повторить</button>
+      </div>}
+      {historyLoading && shownHistory && <p className="refresh-hint" role="status">
+        Обновляем историю без скрытия записей…
+      </p>}
+      {shownHistory && !rows.length && <p className="muted measurement-note">
         За выбранный период измерений нет. Это не означает нулевую загрузку.
       </p>}
       {rows.length > 0 && <div className="agent-table-wrap">
@@ -235,8 +272,8 @@ export default function AgentDetail({ id, refresh, onExpired }: {
         <button disabled={historyLoading || cursorStack.length === 0}
           onClick={() => setCursorStack(a => a.slice(0, -1))}>← Назад</button>
         <span className="muted small">Страница {cursorStack.length + 1}</span>
-        <button disabled={historyLoading || !history?.has_more || !history.next_cursor}
-          onClick={() => { if (history?.next_cursor) setCursorStack(a => [...a, history.next_cursor!]) }}>
+        <button disabled={historyLoading || !shownHistory?.has_more || !shownHistory.next_cursor}
+          onClick={() => { if (shownHistory?.next_cursor) setCursorStack(a => [...a, shownHistory.next_cursor!]) }}>
           Далее →</button>
       </div>
     </section>

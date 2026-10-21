@@ -20,3 +20,8 @@ web/node_modules/
 web/dist/
 web/coverage/
 web/.vite/
+
+# Playwright output and browser test reports
+web/playwright-report/
+web/test-results/
+web/blob-report/

@@ -1,5 +1,5 @@
 import type { MeasurementPage, Measurement, Series, SeriesPoint } from './types'
-import { ApiError } from './client'
+import { requestJSON } from './request'
 import type { Window } from './time'
 export { seriesSegments, makeWindow } from './time'
 export type { Period, Window } from './time'
@@ -27,12 +27,6 @@ function optionalNum(value: unknown): number | null {
 function nullablePart<T>(value: unknown, parse: (v: unknown) => T): T | null {
   return value === null ? null : parse(value)
 }
-async function get(path: string, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(path, { signal, credentials: 'same-origin', cache: 'no-store' })
-  if (!response.ok) throw new ApiError(response.status, 'History API unavailable')
-  return await response.json() as unknown
-}
-
 export function checkUUID(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
@@ -132,7 +126,7 @@ export async function fetchSeries(id: string, window: Window, diskPath: string, 
     agent_id: id, from: window.from, to: window.to, step: window.step
   })
   if (diskPath) params.set('disk_path', diskPath)
-  const series = parseSeries(await get('/api/web/series?' + params, signal))
+  const series = parseSeries(await requestJSON('/api/web/series?' + params, signal))
   if (series.agent_id !== id) throw Error('Unexpected agent in series response')
   return series
 }
@@ -143,7 +137,7 @@ export async function fetchHistory(id: string, window: Window, cursor: string, s
     agent_id: id, from: window.from, to: window.to, limit: '20'
   })
   if (cursor) params.set('cursor', cursor)
-  const page = parseHistory(await get('/api/web/measurements?' + params, signal))
+  const page = parseHistory(await requestJSON('/api/web/measurements?' + params, signal))
   if (page.items.some(item => item.agent_id !== id)) throw Error('Unexpected agent in history response')
   return page
 }

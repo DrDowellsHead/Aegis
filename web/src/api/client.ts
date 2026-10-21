@@ -1,4 +1,6 @@
 import type { AgentInfo, AgentPage, AgentStatus } from './types'
+import { requestJSON } from './request'
+export { ApiError } from './request'
 
 export interface AgentSummary {
   total: number
@@ -7,24 +9,6 @@ export interface AgentSummary {
   unknown: number
   checked_at: string
   offline_after: string
-}
-
-export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) {
-    super(message)
-    this.name = 'ApiError'
-  }
-}
-
-async function jsonRequest(path: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(path, {
-    credentials: 'same-origin',
-    cache: 'no-store',
-    ...init
-  })
-  if (!response.ok) throw new ApiError(response.status, 'Gateway request failed')
-  try { return await response.json() as unknown }
-  catch { throw new Error('Incorrect JSON returned by gateway') }
 }
 
 function record(data: unknown): Record<string, unknown> {
@@ -65,12 +49,12 @@ function agent(input: unknown): AgentInfo {
   return value
 }
 export async function checkSession(signal?: AbortSignal): Promise<boolean> {
-  const data = record(await jsonRequest('/api/web/session', { signal }))
+  const data = record(await requestJSON('/api/web/session', { signal }))
   if (typeof data.authenticated !== 'boolean') throw new Error('Invalid session response')
   return data.authenticated
 }
 export async function signIn(token: string): Promise<void> {
-  const data = record(await jsonRequest('/api/web/login', {
+  const data = record(await requestJSON('/api/web/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token })
@@ -78,12 +62,12 @@ export async function signIn(token: string): Promise<void> {
   if (data.authenticated !== true) throw new Error('Login confirmation missing')
 }
 export async function signOut(): Promise<void> {
-  await jsonRequest('/api/web/logout', { method: 'POST' })
+  await requestJSON('/api/web/logout', { method: 'POST' })
 }
 export async function loadAgents(offlineAfter: string, cursor: string, signal?: AbortSignal): Promise<AgentPage> {
   const params = new URLSearchParams({ limit: '30', offline_after: offlineAfter })
   if (cursor) params.set('cursor', cursor)
-  const r = record(await jsonRequest('/api/web/agents?' + params, { signal }))
+  const r = record(await requestJSON('/api/web/agents?' + params, { signal }))
   if (!Array.isArray(r.items) || typeof r.has_more !== 'boolean') throw new Error('Invalid agents page')
   const page: AgentPage = {
     items: r.items.map(agent),
@@ -95,7 +79,7 @@ export async function loadAgents(offlineAfter: string, cursor: string, signal?: 
 }
 export async function loadSummary(offlineAfter: string, signal?: AbortSignal): Promise<AgentSummary> {
   const params = new URLSearchParams({ offline_after: offlineAfter })
-  const r = record(await jsonRequest('/api/web/summary?' + params, { signal }))
+  const r = record(await requestJSON('/api/web/summary?' + params, { signal }))
   const summary: AgentSummary = {
     total: count(r.total),
     online: count(r.online),

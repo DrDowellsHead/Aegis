@@ -248,3 +248,18 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .chart-inspection { padding:12px; }
   .chart-inspection select { width:100%; }
 }
+
+/* Stage 4.5: stale-while-refresh and explicit retry states. */
+.refresh-hint {
+  margin: 10px 20px; padding: 10px 14px; border: 1px solid #385977;
+  border-radius: 8px; background: #15283e; color: #b4d1e8;
+  font-size: 12px; line-height: 1.5;
+}
+.data-error {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+}
+.data-error button {
+  color: #fff; background: #633a43; border: 1px solid #c27b84;
+  border-radius: 7px; padding: 7px 12px; cursor: pointer;
+}
+.data-error button:disabled { opacity: .5; cursor: not-allowed; }
