@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type MouseEvent, type
 import AgentDetail from './AgentDetail'
 import AdminSettings from './AdminSettings'
 import RulesPage from './RulesPage'
+import IncidentsPage from './IncidentsPage'
 import type { AgentInfo, AgentPage, AgentStatus } from './api/types'
 import {
   ApiError, checkSession, signIn, signOut, loadAgents, loadSummary,
@@ -15,7 +16,7 @@ const navigation = [
   { path: '/', label: 'Обзор', symbol: '◉' },
   { path: '/agents', label: 'Агенты', symbol: '▦' },
   { path: '/rules', label: 'Правила', symbol: '◇' },
-  { path: '/incidents', label: 'Инциденты', symbol: '⚑', future: true },
+  { path: '/incidents', label: 'Инциденты', symbol: '⚑' },
   { path: '/settings', label: 'Настройки', symbol: '⚙' }
 ]
 
@@ -332,9 +333,8 @@ export default function App() {
         {page === 'settings' && <AdminSettings session={session} onExpired={onExpired} />}
         {page === 'rules' && <RulesPage onExpired={onExpired}
           canManage={session.mode === 'local' || session.role === 'admin'} />}
-        {page === 'incidents' && <Panel title={title} note="Будущий этап">
-          <Empty title="В разработке" text="Жизненный цикл инцидентов будет добавлен на этапе 5.3." />
-        </Panel>}
+        {page === 'incidents' && <IncidentsPage onExpired={onExpired}
+          canManage={session.mode === 'local' || session.role === 'admin'} />}
         {page === 'not-found' && <Panel title="Страница не найдена">
           <Empty title="Неизвестный адрес" text="Выберите раздел в навигации." />
         </Panel>}

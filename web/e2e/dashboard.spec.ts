@@ -54,6 +54,36 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
       await respond(200, { revoked: 1 }); return
     }
 
+    if (name === '/api/web/incidents') {
+      const active = url.searchParams.get('state') ?? 'active'
+      const item = {
+        id: ID, agent_id: ID, rule_id: ID, kind: 'threshold', title: 'CPU high',
+        state: active === 'resolved' ? 'resolved' : 'open',
+        opened_at: '2026-10-21T10:00:00Z',
+        acknowledged_at: null, acknowledged_by: null,
+        resolved_at: null, resolution: null
+      }
+      await respond(200, { items: [item], has_more: false }); return
+    }
+    if (name === '/api/web/incidents/events') {
+      await respond(200, { items: [{
+        action: 'opened', actor: 'system', at: '2026-10-21T10:00:00Z', reason: 'condition_detected'
+      }] }); return
+    }
+    if (name === '/api/web/incidents/evaluate') {
+      if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+      await respond(200, { status: 'offline' }); return
+    }
+    if (name === '/api/web/incidents/acknowledge' || name === '/api/web/incidents/resolve') {
+      if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+      await respond(200, {
+        id: ID, agent_id: ID, rule_id: ID, kind: 'threshold', title: 'CPU high',
+        state: name.endsWith('acknowledge') ? 'acknowledged' : 'resolved',
+        opened_at: '2026-10-21T10:00:00Z',
+        acknowledged_at: null, acknowledged_by: null,
+        resolved_at: null, resolution: null
+      }); return
+    }
     if (name === '/api/web/rules') {
       if (request.method() === 'POST') {
         if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
@@ -258,4 +288,30 @@ test('heartbeat alone shows agent online without fabricated measurements', async
   await expect(row.getByText('Online')).toBeVisible()
   await expect(page.getByRole('columnheader', { name: 'Heartbeat' })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: 'Телеметрия' })).toBeVisible()
+})
+
+test('incidents page shows active incidents and operator actions', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'admin' })
+  await page.goto('/incidents')
+  await expect(page.getByRole('heading', { name: 'Инциденты', exact: true })).toBeVisible()
+  await expect(page.getByText('CPU high')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Подтвердить' })).toBeVisible()
+  await page.getByRole('button', { name: 'Подтвердить' }).click()
+  await expect(page.getByText('Инцидент подтверждён.')).toBeVisible()
+  await page.getByRole('button', { name: 'История' }).click()
+  await expect(page.getByText('Открытие', { exact: false })).toBeVisible()
+  await page.getByLabel('UUID агента (необязательно)').fill(ID)
+  await page.getByRole('button', { name: 'Проверить связь' }).click()
+  await expect(page.getByText('Доступность проверена', { exact: false })).toBeVisible()
+})
+
+test('viewer can inspect incidents but has no write controls', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/incidents')
+  await expect(page.getByText('CPU high')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Подтвердить' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Разрешить' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Проверить связь' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'История' }).click()
+  await expect(page.getByText('Открытие', { exact: false })).toBeVisible()
 })

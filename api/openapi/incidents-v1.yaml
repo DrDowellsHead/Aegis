@@ -1,0 +1,103 @@
+openapi: 3.1.0
+info:
+  title: Aegis incident lifecycle API
+  version: 1.0.0
+  description: Step 5.3, cookie-authenticated gateway; evaluations are manual.
+paths:
+  /api/web/incidents:
+    get:
+      summary: List incidents with cursor pagination
+      parameters:
+        - {name: state, in: query, schema: {type: string, enum: [active, resolved, all]}}
+        - {name: agent_id, in: query, schema: {type: string, format: uuid}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: cursor, in: query, schema: {type: string, maxLength: 160}}
+      responses:
+        '200':
+          description: Paginated incident records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, has_more]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Incident'}}
+                  has_more: {type: boolean}
+                  next_cursor: {type: string}
+        '400': {description: Invalid filters}
+        '401': {description: Login required}
+  /api/web/incidents/events:
+    get:
+      summary: Minimal transition events for one incident
+      parameters:
+        - {name: id, in: query, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Up to 100 ordered state transitions}
+        '401': {description: Login required}
+  /api/web/incidents/evaluate:
+    post:
+      summary: Admin-only manual connectivity assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id: {type: string, format: uuid}
+                offline_after: {type: string, default: 1m}
+      responses:
+        '200': {description: 'Evaluated status: online, offline or unknown'}
+        '403': {description: Origin mismatch or insufficient role}
+        '404': {description: Agent not registered}
+  /api/web/incidents/acknowledge:
+    post:
+      summary: Operator acknowledges an open incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IncidentAction'}
+      responses:
+        '200': {description: Updated incident}
+        '403': {description: Origin mismatch or insufficient role}
+        '404': {description: Incident not found}
+        '409': {description: Stale or invalid transition}
+  /api/web/incidents/resolve:
+    post:
+      summary: Operator manually resolves an active incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IncidentAction'}
+      responses:
+        '200': {description: Updated incident}
+        '403': {description: Origin mismatch or insufficient role}
+        '404': {description: Incident not found}
+        '409': {description: Already resolved}
+components:
+  schemas:
+    IncidentAction:
+      type: object
+      required: [id]
+      additionalProperties: false
+      properties:
+        id: {type: string, format: uuid}
+    Incident:
+      type: object
+      required: [id, agent_id, rule_id, kind, title, state, opened_at,
+        acknowledged_at, acknowledged_by, resolved_at, resolution]
+      properties:
+        id: {type: string, format: uuid}
+        agent_id: {type: string, format: uuid}
+        rule_id: {type: [string, 'null'], format: uuid}
+        kind: {type: string, enum: [threshold, agent_offline]}
+        title: {type: string}
+        state: {type: string, enum: [open, acknowledged, resolved]}
+        opened_at: {type: string, format: date-time}
+        acknowledged_at: {type: [string, 'null'], format: date-time}
+        acknowledged_by: {type: [string, 'null']}
+        resolved_at: {type: [string, 'null'], format: date-time}
+        resolution: {type: [string, 'null']}

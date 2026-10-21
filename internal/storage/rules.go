@@ -74,8 +74,8 @@ func readRule(rows interface{ Scan(...any) error }) (RuleRecord, error) {
 	return r, nil
 }
 
-// CreateRule serializes rule creation per agent and never creates an
-// incident or a notification. Duplicate names are rejected.
+// CreateRule serializes rule creation per agent; only evaluations can open
+// incidents. Duplicate names are rejected.
 func (p *Postgres) CreateRule(ctx context.Context, input RuleInput) (RuleRecord, error) {
 	if err := validateRuleInput(input); err != nil {
 		return RuleRecord{}, err
@@ -160,21 +160,22 @@ func (p *Postgres) ListRules(ctx context.Context, agentID string) ([]RuleRecord,
 }
 
 func (p *Postgres) DeleteRule(ctx context.Context, ruleID string) (bool, error) {
-	if !identity.ValidID(ruleID) {
-		return false, fmt.Errorf("invalid rule ID")
-	}
-	if p == nil || p.db == nil {
-		return false, fmt.Errorf("database unavailable")
-	}
-	result, err := p.db.ExecContext(ctx, "DELETE FROM aegis_threshold_rules WHERE id=$1", ruleID)
-	if err != nil {
-		return false, fmt.Errorf("delete threshold rule: %w", err)
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
+	if !identity.ValidID(ruleID) { return false, fmt.Errorf("invalid rule ID") }
+	if p==nil || p.db==nil {return false,fmt.Errorf("database unavailable")}
+	tx,err:=p.db.BeginTx(ctx,nil)
+	if err!=nil {return false,err}
+	defer tx.Rollback()
+	var agentID string
+	err=tx.QueryRowContext(ctx,`SELECT agent_id::text FROM aegis_threshold_rules
+		WHERE id=$1 FOR UPDATE`,ruleID).Scan(&agentID)
+	if errors.Is(err,sql.ErrNoRows){return false,nil}
+	if err!=nil{return false,err}
+	var at time.Time
+	if err=tx.QueryRowContext(ctx,"SELECT clock_timestamp()").Scan(&at);err!=nil{return false,err}
+	if err=resolveIncident(ctx,tx,agentID,ruleID,"threshold","rule_deleted",at.UTC());err!=nil{return false,err}
+	if _,err=tx.ExecContext(ctx,"DELETE FROM aegis_threshold_rules WHERE id=$1",ruleID);err!=nil{return false,err}
+	if err=tx.Commit();err!=nil{return false,err}
+	return true,nil
 }
 
 func aggregateRule(ctx context.Context, tx *sql.Tx, r RuleRecord, at time.Time) (alerts.Observation, error) {
@@ -211,8 +212,8 @@ func aggregateRule(ctx context.Context, tx *sql.Tx, r RuleRecord, at time.Time) 
 	return obs, nil
 }
 
-// EvaluateRules stores a stable firing latch, not an incident. Rules are locked
-// for the transaction so concurrent evaluations cannot cause duplicate transitions.
+// EvaluateRules stores the firing latch and incident lifecycle atomically.
+// Rules are locked to avoid duplicate transitions under concurrent requests.
 // The time window uses measured (started_at) UTC, never received_at.
 func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRecord, error) {
 	if !identity.ValidID(agentID) {
@@ -268,6 +269,14 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 		if err != nil {
 			return nil, fmt.Errorf("store threshold evaluation: %w", err)
 		}
+		// The incident and its state transition are committed in the very
+		// same transaction as the rule latch; no half-written incidents.
+		if out.Firing {
+			err=ensureIncident(ctx,tx,r.AgentID,r.ID,"threshold",r.Name,at)
+		} else {
+			err=resolveIncident(ctx,tx,r.AgentID,r.ID,"threshold","condition_recovered",at)
+		}
+		if err!=nil {return nil,fmt.Errorf("synchronize rule incident: %w",err)}
 		if out.Firing != r.Firing {
 			changed := at
 			r.ChangedAt = &changed
