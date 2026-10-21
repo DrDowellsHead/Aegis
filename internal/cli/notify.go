@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/notify"
+	"github.com/DrDowellsHead/Aegis/internal/secrets"
 )
 
 // runNotify is a separate supervised process; incident writes never depend
@@ -41,11 +42,26 @@ func runNotify(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, err)
 		return 2
 	}
+	smtpPassword, err := secrets.Resolve("AEGIS_SMTP_PASSWORD")
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid SMTP credential source:", err)
+		return 2
+	}
+	telegramToken, err := secrets.Resolve("AEGIS_TELEGRAM_TOKEN")
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid Telegram credential source:", err)
+		return 2
+	}
+	webhookSecret, err := secrets.Resolve("AEGIS_WEBHOOK_SECRET")
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid webhook credential source:", err)
+		return 2
+	}
 	cfg := notify.Config{
 		EmailTo: *email, SMTPFrom: *from, SMTPAddress: *smtpAddress,
-		SMTPUser: os.Getenv("AEGIS_SMTP_USER"), SMTPPassword: os.Getenv("AEGIS_SMTP_PASSWORD"),
-		TelegramChatID: *chat, TelegramToken: os.Getenv("AEGIS_TELEGRAM_TOKEN"),
-		WebhookURL: *webhook, WebhookSecret: os.Getenv("AEGIS_WEBHOOK_SECRET"),
+		SMTPUser: os.Getenv("AEGIS_SMTP_USER"), SMTPPassword: smtpPassword,
+		TelegramChatID: *chat, TelegramToken: telegramToken,
+		WebhookURL: *webhook, WebhookSecret: webhookSecret,
 	}
 	sender, routes, err := notify.New(cfg)
 	if err != nil {
