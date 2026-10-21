@@ -127,5 +127,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|notify|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
 }
