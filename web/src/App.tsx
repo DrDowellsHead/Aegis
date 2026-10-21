@@ -93,7 +93,7 @@ function Login({ onLogin, busy, error, mode }: {
   return <main className="login-page">
     <div className="login-card">
       <div className="brand-name">AEGIS<span className="brand-dot">.</span></div>
-      <p className="eyebrow">ЛОКАЛЬНАЯ ПАНЕЛЬ МОНИТОРИНГА</p>
+      <p className="eyebrow">{mode === 'remote' ? 'ЗАЩИЩЁННАЯ ПАНЕЛЬ МОНИТОРИНГА' : 'ЛОКАЛЬНАЯ ПАНЕЛЬ МОНИТОРИНГА'}</p>
       <h1>Вход в Aegis</h1>
       <p className="muted">{mode === 'remote' ? 'Введите имя пользователя и пароль. Пароль не сохраняется в браузере.' :
           'Введите отдельный токен панели, настроенный на Go-сервере. Он используется только для входа и не сохраняется браузером.'}</p>
@@ -103,7 +103,7 @@ function Login({ onLogin, busy, error, mode }: {
             minLength={3} maxLength={32} value={username} onChange={e => setUsername(e.target.value)} /></>}
         <label htmlFor="dashboard-token">{mode === 'remote' ? 'Пароль' : 'Токен панели'}</label>
         <input id="dashboard-token" type="password" autoComplete={mode === 'remote' ? 'current-password' : 'off'} value={token}
-          onChange={e => setToken(e.target.value)} minLength={mode === 'remote' ? 16 : 32} maxLength={4096}
+          onChange={e => setToken(e.target.value)} minLength={mode === 'remote' ? 16 : 32} maxLength={mode === 'remote' ? 72 : 4096}
           required aria-invalid={error ? true : undefined} />
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="primary-button" type="submit" disabled={busy}>
