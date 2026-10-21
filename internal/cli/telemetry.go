@@ -14,6 +14,7 @@ import (
 
 	"github.com/DrDowellsHead/Aegis/internal/identity"
 	"github.com/DrDowellsHead/Aegis/internal/metrics"
+	"github.com/DrDowellsHead/Aegis/internal/observability"
 	"github.com/DrDowellsHead/Aegis/internal/storage"
 	"github.com/DrDowellsHead/Aegis/internal/telemetry"
 )
@@ -80,6 +81,7 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	maxSamples := flags.Int("max-inflight-samples", 8, "global concurrent measurement requests (1..64)")
 	maxHeartbeats := flags.Int("max-inflight-heartbeats", 2, "separate concurrent heartbeat requests (1..16)")
 	maxPerAgent := flags.Int("max-per-agent-samples", 2, "concurrent measurement requests per agent (1..8)")
+	diagnosticsAddress := flags.String("diagnostics-listen", "", "optional loopback-only metrics and pprof listener (disabled by default)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -93,6 +95,16 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	if *certCA != "" && *certHost == "" {
 		fmt.Fprintln(errOut, "--tls-ca-cert requires --tls-host so the complete chain and SAN can be checked")
 		return 2
+	}
+	if *diagnosticsAddress != "" {
+		if err := observability.RequireLoopback(*diagnosticsAddress); err != nil {
+			fmt.Fprintln(errOut, "invalid diagnostics address:", err)
+			return 2
+		}
+		if len(os.Getenv("AEGIS_DIAGNOSTICS_TOKEN")) < 32 {
+			fmt.Fprintln(errOut, "diagnostics require AEGIS_DIAGNOSTICS_TOKEN with at least 32 random bytes")
+			return 2
+		}
 	}
 	limits := telemetry.ReceiverLimits{Measurements: *maxSamples, Heartbeats: *maxHeartbeats, PerAgent: *maxPerAgent}
 	if err := limits.Validate(); err != nil {
@@ -127,13 +139,52 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "agent registry synchronization:", err)
 		return 1
 	}
+	logger := slog.New(slog.NewJSONHandler(errOut, nil))
+	var observer *observability.Registry
+	var diagnostics net.Listener
+	if *diagnosticsAddress != "" {
+		observer = observability.New()
+		diagnostics, err = net.Listen("tcp", *diagnosticsAddress)
+		if err != nil {
+			fmt.Fprintln(errOut, "diagnostics listen:", err)
+			return 1
+		}
+		// Verify the bound address, not only the flag: never expose pprof.
+		if err := observability.RequireLoopback(diagnostics.Addr().String()); err != nil {
+			_ = diagnostics.Close()
+			fmt.Fprintln(errOut, err)
+			return 2
+		}
+	}
 	listener, err := net.Listen("tcp", *address)
 	if err != nil {
+		if diagnostics != nil { _ = diagnostics.Close() }
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
-	logger := slog.New(slog.NewJSONHandler(errOut, nil))
-	if err := telemetry.ServeReceiverWithLimits(ctx, listener, logger, transport, registry, db, limits); err != nil {
+	if diagnostics == nil {
+		if err := telemetry.ServeReceiverWithLimits(ctx, listener, logger, transport, registry, db, limits); err != nil {
+			fmt.Fprintln(errOut, err)
+			return 1
+		}
+		return 0
+	}
+	receiverCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	diagnosticsDone := make(chan error, 1)
+	go func() {
+		err := observability.Serve(receiverCtx, diagnostics, os.Getenv("AEGIS_DIAGNOSTICS_TOKEN"), observer, db.Stats, logger)
+		if err != nil { stop() }
+		diagnosticsDone <- err
+	}()
+	err = telemetry.ServeReceiverObserved(receiverCtx, listener, logger, transport, registry, db, limits, observer)
+	stop()
+	diagnosticsErr := <-diagnosticsDone
+	if diagnosticsErr != nil {
+		fmt.Fprintln(errOut, "diagnostics:", diagnosticsErr)
+		return 1
+	}
+	if err != nil {
 		fmt.Fprintln(errOut, err)
 		return 1
 	}

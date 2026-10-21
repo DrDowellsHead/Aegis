@@ -59,6 +59,12 @@ func Open(ctx context.Context, dsn string) (*Postgres, error) {
 	return &Postgres{db: db}, nil
 }
 
+// Stats exposes database/sql pool diagnostics without running an SQL query.
+func (p *Postgres) Stats() sql.DBStats {
+	if p == nil || p.db == nil { return sql.DBStats{} }
+	return p.db.Stats()
+}
+
 func (p *Postgres) Close() error {
 	if p == nil || p.db == nil {
 		return nil

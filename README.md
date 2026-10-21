@@ -1069,3 +1069,15 @@ export AEGIS_DATABASE_URL='postgres://user:password@127.0.0.1:5432/aegis?sslmode
 `--confirm-empty-target`. Используйте защищённое TLS-подключение к
 удалённым БД. Подробности и контрольный список:
 [ADR 0030](docs/adr/0030-postgresql-backup-restore.md).
+
+## Наблюдаемость Aegis (фаза 6.8)
+
+У процесса `aegis receive` по умолчанию **нет диагностического HTTP-порта**.
+Для диагностики вручную включите `--diagnostics-listen 127.0.0.1:9091`
+и задайте случайный секрет `AEGIS_DIAGNOSTICS_TOKEN` (не менее 32 байт).
+`GET /metrics` отдаёт Prometheus-совместимые показатели gRPC, SQL-пула
+и памяти процесса; защищённый `/debug/pprof/` помогает профилировать
+CPU, heap и горутины. Сервис доступен только через числовой loopback IP
+и требует Bearer-токен для каждого HTTP-запроса. Никогда не публикуйте
+pprof или метрики через общедоступный reverse proxy.
+См. [ADR 0032](docs/adr/0032-observability.md).

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/identity"
+	"github.com/DrDowellsHead/Aegis/internal/observability"
 	"github.com/DrDowellsHead/Aegis/internal/storage"
 	pb "github.com/DrDowellsHead/Aegis/internal/telemetry/v1"
 	"google.golang.org/grpc"
@@ -37,6 +38,7 @@ type Receiver struct {
 	registry  identity.Registry
 	store     MeasurementStore
 	admission *receiverAdmission
+	metrics *observability.Registry
 }
 
 func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendResponse, error) {
@@ -66,7 +68,9 @@ func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendRespo
 	if r.store == nil {
 		return nil, status.Error(codes.Unavailable, "storage unavailable")
 	}
+	started := time.Now()
 	already, err := r.store.Save(ctx, req.AgentId, req.MeasurementId, req.Snapshot)
+	r.metrics.ObserveDatabase("save", err, time.Since(started))
 	if err != nil {
 		if errors.Is(err, storage.ErrPayloadMismatch) {
 			return nil, status.Error(codes.FailedPrecondition, "measurement ID reused with different payload")
@@ -104,7 +108,10 @@ func (r *Receiver) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb
 	if !ok {
 		return nil, status.Error(codes.Unavailable, "heartbeat storage unavailable")
 	}
-	if err := store.RecordHeartbeat(ctx, req.GetAgentId()); err != nil {
+	started := time.Now()
+	err := store.RecordHeartbeat(ctx, req.GetAgentId())
+	r.metrics.ObserveDatabase("heartbeat", err, time.Since(started))
+	if err != nil {
 		if errors.Is(err, storage.ErrAgentNotRegistered) {
 			return nil, status.Error(codes.FailedPrecondition, "agent registry not synchronized")
 		}
@@ -133,6 +140,12 @@ func ServeReceiver(ctx context.Context, listener net.Listener, logger *slog.Logg
 // ServeReceiverWithLimits bounds all active telemetry writes across connections,
 // not just each HTTP/2 connection's grpc.MaxConcurrentStreams setting.
 func ServeReceiverWithLimits(ctx context.Context, listener net.Listener, logger *slog.Logger, transport credentials.TransportCredentials, registry identity.Registry, store MeasurementStore, limits ReceiverLimits) error {
+	return ServeReceiverObserved(ctx, listener, logger, transport, registry, store, limits, nil)
+}
+
+// ServeReceiverObserved attaches low-cardinality metrics. Existing callers
+// without an observer preserve their previous behaviour.
+func ServeReceiverObserved(ctx context.Context, listener net.Listener, logger *slog.Logger, transport credentials.TransportCredentials, registry identity.Registry, store MeasurementStore, limits ReceiverLimits, observer *observability.Registry) error {
 	if listener == nil || logger == nil || transport == nil || store == nil {
 		if listener != nil {
 			_ = listener.Close()
@@ -143,8 +156,25 @@ func ServeReceiverWithLimits(ctx context.Context, listener net.Listener, logger 
 		_ = listener.Close()
 		return fmt.Errorf("invalid receiver resource limits: %w", err)
 	}
-	server := grpc.NewServer(grpc.Creds(transport), grpc.MaxRecvMsgSize(1<<20), grpc.MaxConcurrentStreams(64))
-	pb.RegisterTelemetryServiceServer(server, &Receiver{logger: logger, registry: registry, store: store, admission: newReceiverAdmission(limits)})
+	options := []grpc.ServerOption{grpc.Creds(transport), grpc.MaxRecvMsgSize(1 << 20), grpc.MaxConcurrentStreams(64)}
+	if observer != nil {
+		options = append(options, grpc.UnaryInterceptor(func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handle grpc.UnaryHandler) (any, error) {
+			method := "other"
+			switch {
+			case strings.HasSuffix(info.FullMethod, "/Send"):
+				method = "send"
+			case strings.HasSuffix(info.FullMethod, "/Heartbeat"):
+				method = "heartbeat"
+			}
+			started := time.Now()
+			observer.BeginRPC()
+			response, err := handle(ctx, request)
+			observer.EndRPC(method, status.Code(err).String(), time.Since(started))
+			return response, err
+		}))
+	}
+	server := grpc.NewServer(options...)
+	pb.RegisterTelemetryServiceServer(server, &Receiver{logger: logger, registry: registry, store: store, admission: newReceiverAdmission(limits), metrics: observer})
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	logger.Info("authenticated database-backed TLS receiver started", "address", listener.Addr().String(),
