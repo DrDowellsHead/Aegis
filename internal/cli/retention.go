@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/DrDowellsHead/Aegis/internal/adminconfig"
 	"github.com/DrDowellsHead/Aegis/internal/storage"
-"github.com/DrDowellsHead/Aegis/internal/adminconfig"
 )
 
 func openOperatorDatabase(ctx context.Context) (*storage.Postgres, error) {
@@ -73,9 +73,12 @@ type retentionOutput struct {
 // Default is preview. Applying to ALL agents requires --all-agents explicitly.
 // This is a one-shot operator command, not a background retention scheduler.
 func runRetention(ctx context.Context, args []string, out, errOut io.Writer) int {
-	cfg,err:=adminconfig.Load(os.Getenv("AEGIS_ADMIN_CONFIG"))
-    if err!=nil{fmt.Fprintln(errOut,"invalid administrative configuration:",err);return 2}
-    flags := flag.NewFlagSet("retention", flag.ContinueOnError)
+	cfg, err := adminconfig.Load(os.Getenv("AEGIS_ADMIN_CONFIG"))
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid administrative configuration:", err)
+		return 2
+	}
+	flags := flag.NewFlagSet("retention", flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	days := flags.Int("days", cfg.RetentionDays, "retention period in whole days (7..3650; required)")
 	agentID := flags.String("agent-id", "", "optional UUID for one agent")
@@ -113,31 +116,38 @@ func runRetention(ctx context.Context, args []string, out, errOut io.Writer) int
 	if *apply {
 		result.Mode = "apply"
 		result.MaxDelete = *maxDelete
-		actor:=adminOperator()
-        scope:=preview.AgentID
-        if scope=="" {scope="all"}
-        id,err:=db.BeginAudit(ctx,"retention",actor,scope,&preview.RetentionDays)
-        if err!=nil{fmt.Fprintln(errOut,"audit unavailable; refusing deletion:",err);return 1}
-        deleted,opErr:=db.PurgeAudited(ctx,preview,*batch,*maxDelete,id)
-        result.DeletedRows=deleted
-        result.ReachedLimit=deleted==int64(*maxDelete)
-        state:="succeeded"
-        if opErr!=nil{
-            state="failed"
-            if ctx.Err()!=nil{state="interrupted"}
-        }
-        finishCtx,finishCancel:=context.WithTimeout(context.Background(),10*time.Second)
-        finishErr:=db.FinishAudit(finishCtx,id,state)
-        finishCancel()
-        if finishErr!=nil{
-            fmt.Fprintf(errOut,"operation %s: cannot complete audit: %v\n",id,finishErr)
-            return 1
-        }
-        if opErr!=nil{
-            fmt.Fprintf(errOut,"operation %s interrupted after %d committed deletions: %v\n",id,deleted,opErr)
-            _=json.NewEncoder(out).Encode(result)
-            return 1
-        }
+		actor := adminOperator()
+		scope := preview.AgentID
+		if scope == "" {
+			scope = "all"
+		}
+		id, err := db.BeginAudit(ctx, "retention", actor, scope, &preview.RetentionDays)
+		if err != nil {
+			fmt.Fprintln(errOut, "audit unavailable; refusing deletion:", err)
+			return 1
+		}
+		deleted, opErr := db.PurgeAudited(ctx, preview, *batch, *maxDelete, id)
+		result.DeletedRows = deleted
+		result.ReachedLimit = deleted == int64(*maxDelete)
+		state := "succeeded"
+		if opErr != nil {
+			state = "failed"
+			if ctx.Err() != nil {
+				state = "interrupted"
+			}
+		}
+		finishCtx, finishCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		finishErr := db.FinishAudit(finishCtx, id, state)
+		finishCancel()
+		if finishErr != nil {
+			fmt.Fprintf(errOut, "operation %s: cannot complete audit: %v\n", id, finishErr)
+			return 1
+		}
+		if opErr != nil {
+			fmt.Fprintf(errOut, "operation %s interrupted after %d committed deletions: %v\n", id, deleted, opErr)
+			_ = json.NewEncoder(out).Encode(result)
+			return 1
+		}
 	}
 	if err := json.NewEncoder(out).Encode(result); err != nil {
 		fmt.Fprintln(errOut, "encode retention result:", err)

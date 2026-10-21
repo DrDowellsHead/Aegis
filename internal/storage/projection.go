@@ -53,16 +53,18 @@ type backfillRow struct {
 // marking each row projected. Interrupted batches roll back completely.
 // This method requires write access; the read-only history role cannot call it.
 func (p *Postgres) BackfillBatch(ctx context.Context, limit int) (int, error) {
-    return p.backfillBatch(ctx,limit,"")
+	return p.backfillBatch(ctx, limit, "")
 }
 
 // BackfillBatchAudited updates progress in the same transaction as its rows.
-func(p *Postgres)BackfillBatchAudited(ctx context.Context,limit int,auditID string)(int,error){
-    if !validStoredAgentID(auditID){return 0,fmt.Errorf("invalid audit ID")}
-    return p.backfillBatch(ctx,limit,auditID)
+func (p *Postgres) BackfillBatchAudited(ctx context.Context, limit int, auditID string) (int, error) {
+	if !validStoredAgentID(auditID) {
+		return 0, fmt.Errorf("invalid audit ID")
+	}
+	return p.backfillBatch(ctx, limit, auditID)
 }
 
-func(p *Postgres)backfillBatch(ctx context.Context,limit int,auditID string)(int,error){
+func (p *Postgres) backfillBatch(ctx context.Context, limit int, auditID string) (int, error) {
 	if p == nil || p.db == nil {
 		return 0, fmt.Errorf("database unavailable")
 	}
@@ -116,10 +118,10 @@ func(p *Postgres)backfillBatch(ctx context.Context,limit int,auditID string)(int
 			return 0, fmt.Errorf("backfill row %s/%s: %w", r.agentID, r.measurementID, err)
 		}
 	}
-	if err := advanceAudit(ctx,tx,auditID,int64(len(batch)));err!=nil{
-        return 0,err
-    }
-    if err := tx.Commit(); err != nil {
+	if err := advanceAudit(ctx, tx, auditID, int64(len(batch))); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit backfill: %w", err)
 	}
 	return len(batch), nil

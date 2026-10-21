@@ -9,15 +9,18 @@ import (
 	"os"
 	"time"
 
+	"github.com/DrDowellsHead/Aegis/internal/adminconfig"
 	"github.com/DrDowellsHead/Aegis/internal/storage"
-"github.com/DrDowellsHead/Aegis/internal/adminconfig"
 )
 
 // backfill is intentionally an explicit operator command: schema migrations
 // must not hold a database-wide transaction while rewriting old telemetry.
-func runBackfill(ctx context.Context,args []string,out,errOut io.Writer)(code int){
-    cfg,err:=adminconfig.Load(os.Getenv("AEGIS_ADMIN_CONFIG"))
-    if err!=nil{fmt.Fprintln(errOut,"invalid administrative configuration:",err);return 2}
+func runBackfill(ctx context.Context, args []string, out, errOut io.Writer) (code int) {
+	cfg, err := adminconfig.Load(os.Getenv("AEGIS_ADMIN_CONFIG"))
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid administrative configuration:", err)
+		return 2
+	}
 	flags := flag.NewFlagSet("backfill", flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	batchSize := flags.Int("batch-size", cfg.BackfillBatch, "records per transaction (1..500)")
@@ -46,20 +49,25 @@ func runBackfill(ctx context.Context,args []string,out,errOut io.Writer)(code in
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
-	id,err:=db.BeginAudit(ctx,"backfill",adminOperator(),"unprojected",nil)
-    if err!=nil{fmt.Fprintln(errOut,"audit unavailable; refusing backfill:",err);return 1}
-    state:="failed"
-    defer func(){
-        if ctx.Err()!=nil&&state!="succeeded"{state="interrupted"}
-        finishCtx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
-        defer cancel()
-        if err:=db.FinishAudit(finishCtx,id,state);err!=nil{
-            fmt.Fprintln(errOut,"cannot finalize audit:",err)
-            code=1
-        }
-    }()
-    total := 0
-    for {
+	id, err := db.BeginAudit(ctx, "backfill", adminOperator(), "unprojected", nil)
+	if err != nil {
+		fmt.Fprintln(errOut, "audit unavailable; refusing backfill:", err)
+		return 1
+	}
+	state := "failed"
+	defer func() {
+		if ctx.Err() != nil && state != "succeeded" {
+			state = "interrupted"
+		}
+		finishCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := db.FinishAudit(finishCtx, id, state); err != nil {
+			fmt.Fprintln(errOut, "cannot finalize audit:", err)
+			code = 1
+		}
+	}()
+	total := 0
+	for {
 		if err := ctx.Err(); err != nil {
 			fmt.Fprintln(errOut, err)
 			return 1
@@ -81,7 +89,7 @@ func runBackfill(ctx context.Context,args []string,out,errOut io.Writer)(code in
 			break
 		}
 	}
-	state="succeeded"
-    fmt.Fprintf(out,"Backfilled %d legacy measurements (operation %s)\n",total,id)
-    return 0
+	state = "succeeded"
+	fmt.Fprintf(out, "Backfilled %d legacy measurements (operation %s)\n", total, id)
+	return 0
 }
