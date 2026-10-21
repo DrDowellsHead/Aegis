@@ -77,6 +77,10 @@ func readRule(rows interface{ Scan(...any) error }) (RuleRecord, error) {
 // CreateRule serializes rule creation per agent; only evaluations can open
 // incidents. Duplicate names are rejected.
 func (p *Postgres) CreateRule(ctx context.Context, input RuleInput) (RuleRecord, error) {
+	return p.CreateRuleAs(ctx,input,"system")
+}
+// CreateRuleAs records operator intent in the SAME transaction as rule creation.
+func (p *Postgres) CreateRuleAs(ctx context.Context,input RuleInput,actor string)(RuleRecord,error) {
 	if err := validateRuleInput(input); err != nil {
 		return RuleRecord{}, err
 	}
@@ -126,6 +130,10 @@ func (p *Postgres) CreateRule(ctx context.Context, input RuleInput) (RuleRecord,
 		"INSERT INTO aegis_rule_states (rule_id) VALUES($1)", id); err != nil {
 		return RuleRecord{}, fmt.Errorf("initialize threshold state: %w", err)
 	}
+	if err=appendOperatorAction(ctx,tx,actor,"rule_created",input.AgentID,id,input.Name,
+		map[string]any{"metric":input.Metric,"direction":input.Direction});err!=nil {
+		return RuleRecord{},fmt.Errorf("audit rule creation: %w",err)
+	}
 	if err := tx.Commit(); err != nil {
 		return RuleRecord{}, fmt.Errorf("commit threshold rule: %w", err)
 	}
@@ -159,7 +167,10 @@ func (p *Postgres) ListRules(ctx context.Context, agentID string) ([]RuleRecord,
 	return out, nil
 }
 
-func (p *Postgres) DeleteRule(ctx context.Context, ruleID string) (bool, error) {
+func (p *Postgres) DeleteRule(ctx context.Context,ruleID string)(bool,error){
+	return p.DeleteRuleAs(ctx,ruleID,"system")
+}
+func (p *Postgres) DeleteRuleAs(ctx context.Context,ruleID,actor string)(bool,error) {
 	if !identity.ValidID(ruleID) {
 		return false, fmt.Errorf("invalid rule ID")
 	}
@@ -190,6 +201,7 @@ func (p *Postgres) DeleteRule(ctx context.Context, ruleID string) (bool, error) 
 	if _, err = tx.ExecContext(ctx, "DELETE FROM aegis_threshold_rules WHERE id=$1", ruleID); err != nil {
 		return false, err
 	}
+	if err=appendOperatorAction(ctx,tx,actor,"rule_deleted",agentID,ruleID,"Пороговое правило удалено",nil);err!=nil{return false,err}
 	if err = tx.Commit(); err != nil {
 		return false, err
 	}
@@ -233,7 +245,10 @@ func aggregateRule(ctx context.Context, tx *sql.Tx, r RuleRecord, at time.Time) 
 // EvaluateRules stores the firing latch and incident lifecycle atomically.
 // Rules are locked to avoid duplicate transitions under concurrent requests.
 // The time window uses measured (started_at) UTC, never received_at.
-func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRecord, error) {
+func (p *Postgres) EvaluateRules(ctx context.Context,agentID string)([]RuleRecord,error){
+	return p.EvaluateRulesAs(ctx,agentID,"system")
+}
+func (p *Postgres) EvaluateRulesAs(ctx context.Context,agentID,actor string)([]RuleRecord,error) {
 	if !identity.ValidID(agentID) {
 		return nil, fmt.Errorf("invalid agent ID")
 	}
@@ -313,6 +328,8 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 		r.Firing, r.LastStatus, r.LastAverage = out.Firing, out.Status, obs.Average
 		r.SampleCount, r.LastSampleAt, r.EvaluatedAt = obs.Samples, obs.Latest, &at
 	}
+	if err=appendOperatorAction(ctx,tx,actor,"rules_evaluated",agentID,agentID,
+		"Ручная оценка пороговых правил",map[string]any{"rules":len(records)});err!=nil{return nil,err}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit threshold evaluation: %w", err)
 	}
