@@ -1,0 +1,24 @@
+name: Format activity journal (temporary)
+on:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/format-activity-56.yml]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+      - name: Run gofmt for activity journal
+        shell: bash
+        run: |
+          gofmt -w internal/storage/activity.go internal/storage/activity_test.go internal/storage/rules.go internal/storage/incidents.go internal/storage/incident_policy.go internal/storage/notifications.go internal/storage/incidents_test.go internal/storage/ready.go internal/dashboard/activity.go internal/dashboard/activity_test.go internal/dashboard/incidents.go internal/dashboard/rules.go internal/dashboard/http.go
+          git add internal/storage/activity.go internal/storage/activity_test.go internal/storage/rules.go internal/storage/incidents.go internal/storage/incident_policy.go internal/storage/notifications.go internal/storage/incidents_test.go internal/storage/ready.go internal/dashboard/activity.go internal/dashboard/activity_test.go internal/dashboard/incidents.go internal/dashboard/rules.go internal/dashboard/http.go
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Format activity journal and operator auditing"
+            git push origin HEAD:develop
+          fi
