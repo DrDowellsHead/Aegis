@@ -53,6 +53,34 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
       if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
       await respond(200, { revoked: 1 }); return
     }
+
+    if (name === '/api/web/rules') {
+      if (request.method() === 'POST') {
+        if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+        await respond(201, { id: ID }); return
+      }
+      await respond(200, { items: [{
+        id: ID, agent_id: ID, name: 'CPU high', metric: 'cpu', direction: 'above',
+        fire_at: 85, recover_at: 70, window_seconds: 300, min_samples: 3,
+        max_age_seconds: 120, disk_path: '', firing: false, last_status: 'not_evaluated',
+        last_average: null, sample_count: 0, last_sample_at: null,
+        evaluated_at: null, changed_at: null
+      }] }); return
+    }
+    if (name === '/api/web/rules/evaluate') {
+      if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+      await respond(200, { items: [{
+        id: ID, agent_id: ID, name: 'CPU high', metric: 'cpu', direction: 'above',
+        fire_at: 85, recover_at: 70, window_seconds: 300, min_samples: 3,
+        max_age_seconds: 120, disk_path: '', firing: true, last_status: 'firing',
+        last_average: 90, sample_count: 4, last_sample_at: new Date().toISOString(),
+        evaluated_at: new Date().toISOString(), changed_at: new Date().toISOString()
+      }] }); return
+    }
+    if (name === '/api/web/rules/delete') {
+      if (state.role !== 'admin') { await respond(403, { error: 'forbidden' }); return }
+      await respond(200, { deleted: true }); return
+    }
     if (state.failReads) { await respond(503, { error: 'data_unavailable' }); return }
     if (name === '/api/web/summary') {
       await respond(200, {
@@ -195,4 +223,26 @@ test('viewer has no administrator controls', async ({ page }) => {
   await page.goto('/settings')
   await expect(page.getByText('управление пользователями доступно только администратору', { exact: false })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Отозвать все' })).toHaveCount(0)
+})
+
+test('threshold rules page shows real API states and admin evaluation', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'admin' })
+  await page.goto('/rules')
+  await expect(page.getByRole('heading', { name: 'Пороговые правила' })).toBeVisible()
+  await page.getByLabel('UUID компьютера').fill(ID)
+  await page.getByRole('button', { name: 'Открыть правила' }).click()
+  await expect(page.getByText('CPU high')).toBeVisible()
+  await page.getByRole('button', { name: 'Проверить сейчас' }).click()
+  await expect(page.getByText('Порог сработал')).toBeVisible()
+  await expect(page.getByLabel('Создать пороговое правило')).toBeVisible()
+})
+
+test('viewer can read rules but cannot change or evaluate them', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/rules')
+  await page.getByLabel('UUID компьютера').fill(ID)
+  await page.getByRole('button', { name: 'Открыть правила' }).click()
+  await expect(page.getByText('CPU high')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Проверить сейчас' })).toHaveCount(0)
+  await expect(page.getByLabel('Создать пороговое правило')).toHaveCount(0)
 })

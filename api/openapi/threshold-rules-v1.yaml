@@ -1,0 +1,130 @@
+openapi: 3.1.0
+info:
+  title: Aegis threshold rules API
+  version: 1.0.0
+  description: |
+    Step 5.1 condition evaluation, not incident creation or notifications.
+    Mounted on the same authenticated dashboard gateway and HTTPS origin.
+security:
+  - dashboardSession: []
+paths:
+  /api/web/rules:
+    get:
+      summary: List threshold rule definitions and last evaluated states
+      parameters:
+        - in: query
+          name: agent_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Rule records for this agent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 50
+                    items: {$ref: '#/components/schemas/RuleRecord'}
+        '401': {description: Not logged in}
+        '400': {description: Invalid query}
+    post:
+      summary: Create rule (admin, same-origin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RuleInput'}
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuleRecord'}
+        '400': {description: Invalid rule}
+        '401': {description: Not logged in}
+        '403': {description: Not admin / cross-origin}
+        '404': {description: Agent not registered}
+        '409': {description: Duplicate name or per-agent rule limit}
+  /api/web/rules/delete:
+    post:
+      summary: Delete a rule (admin, same-origin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: {type: string, format: uuid}
+      responses:
+        '200': {description: Rule removed}
+        '403': {description: Not admin / cross-origin}
+        '404': {description: Rule not found}
+  /api/web/rules/evaluate:
+    post:
+      summary: Manually evaluate all rules of an agent and durably update the state
+      description: Does not create incidents, events or notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Rule records after committing evaluation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/RuleRecord'}
+        '403': {description: Not admin / cross-origin}
+        '503': {description: Database unavailable}
+components:
+  securitySchemes:
+    dashboardSession:
+      type: apiKey
+      in: cookie
+      name: aegis_dashboard_session
+  schemas:
+    RuleInput:
+      type: object
+      additionalProperties: false
+      required: [agent_id,name,metric,direction,fire_at,recover_at,window_seconds,min_samples,max_age_seconds,disk_path]
+      properties:
+        agent_id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 80}
+        metric: {type: string, enum: [cpu,memory,disk]}
+        direction: {type: string, enum: [above,below]}
+        fire_at: {type: number, minimum: 0, maximum: 100}
+        recover_at: {type: number, minimum: 0, maximum: 100}
+        window_seconds: {type: integer, minimum: 60, maximum: 86400}
+        min_samples: {type: integer, minimum: 1, maximum: 10000}
+        max_age_seconds: {type: integer, minimum: 1, maximum: 86400}
+        disk_path: {type: string, maxLength: 1024}
+    RuleRecord:
+      allOf:
+        - $ref: '#/components/schemas/RuleInput'
+        - type: object
+          required: [id,firing,last_status,last_average,sample_count,last_sample_at,evaluated_at,changed_at]
+          properties:
+            id: {type: string, format: uuid}
+            firing: {type: boolean}
+            last_status: {type: string, enum: [not_evaluated,normal,firing,insufficient_data]}
+            last_average: {type: [number, 'null']}
+            sample_count: {type: integer, minimum: 0}
+            last_sample_at: {type: [string, 'null'], format: date-time}
+            evaluated_at: {type: [string, 'null'], format: date-time}
+            changed_at: {type: [string, 'null'], format: date-time}

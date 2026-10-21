@@ -148,7 +148,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w, "POST")
 			return
 		}
-		if !validOrigin(r) {
+		if !h.originAllowed(r) {
 			fail(w, http.StatusForbidden, "invalid_origin")
 			return
 		}
@@ -179,6 +179,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.remoteAdmin(w, r, true)
+		return
+	case "/api/web/rules", "/api/web/rules/delete", "/api/web/rules/evaluate":
+		h.rules(w, r)
 		return
 	case "/api/web/agents":
 		if r.Method != http.MethodGet {
@@ -243,7 +246,7 @@ func (h *Handler) static(w http.ResponseWriter, r *http.Request) {
 	// Browser HTML fallback is allowed ONLY for known SPA routes. FileServer
 	// handles versioned Vite assets without turning arbitrary paths into HTML.
 	path := r.URL.Path
-	if path == "/" || path == "/agents" || path == "/incidents" || path == "/settings" ||
+	if path == "/" || path == "/agents" || path == "/rules" || path == "/incidents" || path == "/settings" ||
 		strings.HasPrefix(path, "/agents/") {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		http.ServeFile(w, r, filepath.Join(h.root, "index.html"))
