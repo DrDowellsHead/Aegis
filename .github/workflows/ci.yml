@@ -88,3 +88,28 @@ jobs:
           cache: false
       - name: PostgreSQL + authenticated gRPC integration
         run: go test -race -count=1 -timeout=90s ./internal/storage ./internal/telemetry ./internal/history
+
+  web:
+    name: Web dashboard (TypeScript and production bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked npm dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and Vite production build
+        working-directory: web
+        run: npm run build
+      - name: Prevent server credential references in client bundle
+        shell: bash
+        run: |
+          if grep -R -q -E 'postgres://|AEGIS_HISTORY_TOKEN|AEGIS_DATABASE_URL' web/dist/; then
+            echo "Unexpected server-side credential reference found in browser output"
+            exit 1
+          fi
