@@ -185,3 +185,32 @@ func TestIncidentPolicyUpdatePostgres(t *testing.T) {
 		t.Fatalf("policy did not persist: %+v %v", read, err)
 	}
 }
+
+func TestStaleThresholdDataDoesNotEscalateOrReopenPostgres(t *testing.T) {
+	db,ctx,id:=incidentDB(t)
+	setIncidentPolicyForTest(t,db,ctx,0,60)
+	_,err:=db.CreateRule(ctx,RuleInput{AgentID:id,Rule:alerts.Rule{
+		Name:"CPU stale",Metric:"cpu",Direction:"above",FireAt:85,RecoverAt:70,
+		WindowSeconds:60,MinSamples:1,MaxAgeSeconds:60,
+	}})
+	if err!=nil {t.Fatal(err)}
+	makeCPU(t,db,ctx,id,95)
+	if _,err=db.EvaluateRules(ctx,id);err!=nil {t.Fatal(err)}
+	open:=incidentList(t,db,ctx,id,"active")
+	if len(open)!=1 {t.Fatalf("no incident: %+v",open)}
+	_,err=db.db.ExecContext(ctx,`UPDATE aegis_incidents SET
+		opened_at=clock_timestamp()-interval '2 minutes' WHERE id=$1`,open[0].ID)
+	if err!=nil {t.Fatal(err)}
+	_,err=db.db.ExecContext(ctx,"DELETE FROM aegis_measurements WHERE agent_id=$1",id)
+	if err!=nil {t.Fatal(err)}
+	if _,err=db.EvaluateRules(ctx,id);err!=nil {t.Fatal(err)}
+	active:=incidentList(t,db,ctx,id,"active")
+	if len(active)!=1 || active[0].Severity!="warning" {
+		t.Fatalf("stale metric wrongly escalated: %+v",active)
+	}
+	if _,err=db.ChangeIncident(ctx,open[0].ID,"resolve","operator");err!=nil {t.Fatal(err)}
+	if _,err=db.EvaluateRules(ctx,id);err!=nil {t.Fatal(err)}
+	if got:=incidentList(t,db,ctx,id,"active");len(got)!=0 {
+		t.Fatalf("stale retained latch created a new incident: %+v",got)
+	}
+}
