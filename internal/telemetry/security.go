@@ -3,46 +3,47 @@ package telemetry
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"os"
 
 	"google.golang.org/grpc/credentials"
+
+	"github.com/DrDowellsHead/Aegis/internal/identity"
 )
 
-// ServerCredentials requires a certificate chain and the matching private key.
+// ServerCredentials performs proactive leaf validity and server-purpose
+// checks before accepting any inbound TLS connections.
 func ServerCredentials(certPath, keyPath string) (credentials.TransportCredentials, error) {
-	if certPath == "" || keyPath == "" {
-		return nil, fmt.Errorf("TLS certificate and key are required")
+	return ServerCredentialsForHost(certPath, keyPath, "", "")
+}
+
+// ServerCredentialsForHost additionally checks the expected SAN and optional
+// issuer chain. The recipient must still independently verify that SAN
+// against its actual connection target.
+func ServerCredentialsForHost(certPath, keyPath, rootsPath, hostname string) (credentials.TransportCredentials, error) {
+	if _, err := identity.ValidateServerCertificate(certPath, keyPath, rootsPath, hostname, 0); err != nil {
+		return nil, fmt.Errorf("invalid server TLS certificate: %w", err)
 	}
 	pair, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("load TLS certificate: %w", err)
 	}
 	return credentials.NewTLS(&tls.Config{
-		MinVersion:   tls.VersionTLS12,
+		MinVersion: tls.VersionTLS12,
 		Certificates: []tls.Certificate{pair},
-		NextProtos:   []string{"h2"},
+		NextProtos: []string{"h2"},
 	}), nil
 }
 
-// ClientCredentials trusts only the explicitly supplied CA; it never skips
-// chain, expiry or DNS/IP subject alternative name verification.
+// ClientCredentials accepts one or more explicit, valid CA certificates to
+// support two-phase CA rollover without InsecureSkipVerify.
 func ClientCredentials(caPath string) (credentials.TransportCredentials, error) {
-	if caPath == "" {
-		return nil, fmt.Errorf("CA certificate path is required")
-	}
-	pem, err := os.ReadFile(caPath)
+	roots, _, err := identity.LoadTrustBundle(caPath)
 	if err != nil {
-		return nil, fmt.Errorf("read CA certificate: %w", err)
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(pem) {
-		return nil, fmt.Errorf("CA certificate contains no usable PEM certificates")
+		return nil, fmt.Errorf("load TLS trust: %w", err)
 	}
 	return credentials.NewTLS(&tls.Config{
 		MinVersion: tls.VersionTLS12,
-		RootCAs:    roots,
+		RootCAs: roots,
 		NextProtos: []string{"h2"},
 	}), nil
 }
