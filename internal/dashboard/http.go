@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -36,7 +37,11 @@ type Reader interface {
 	ListHistory(context.Context, storage.HistoryQuery) (storage.HistoryResult, error)
 }
 
-type session struct{ expires time.Time }
+type session struct {
+	expires time.Time
+	username string
+	role Role
+}
 type Handler struct {
 	reader         Reader
 	passwordHash   [sha256.Size]byte
@@ -45,6 +50,7 @@ type Handler struct {
 	mu             sync.Mutex
 	sessions       map[[sha256.Size]byte]session
 	failedAttempts []time.Time
+	remote         *remoteAuth
 }
 
 func New(reader Reader, password, staticDir string, logger *slog.Logger) (*Handler, error) {
@@ -101,8 +107,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Frame-Options", "DENY")
+	if h.remote != nil {
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+	}
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
-	if !validHost(r.Host) {
+	if !h.requestHostAllowed(r) {
 		fail(w, http.StatusBadRequest, "invalid_host")
 		return
 	}
@@ -110,6 +119,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/api/web/session":
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, "GET")
+			return
+		}
+		if h.remote != nil {
+			h.remoteSessionInfo(w, r)
 			return
 		}
 		_, ok := h.authorized(r)
@@ -120,11 +133,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w, "POST")
 			return
 		}
-		if !validOrigin(r) {
+		if !h.originAllowed(r) {
 			fail(w, http.StatusForbidden, "invalid_origin")
 			return
 		}
-		h.login(w, r)
+		if h.remote != nil {
+			h.remoteLogin(w, r)
+		} else {
+			h.login(w, r)
+		}
 		return
 	case "/api/web/logout":
 		if r.Method != http.MethodPost {
@@ -136,6 +153,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logout(w, r)
+		return
+	case "/api/web/admin/users":
+		if h.remote == nil { fail(w, http.StatusNotFound, "not_found"); return }
+		if r.Method != http.MethodGet { methodNotAllowed(w, "GET"); return }
+		h.remoteAdmin(w, r, false)
+		return
+	case "/api/web/admin/sessions/revoke":
+		if h.remote == nil { fail(w, http.StatusNotFound, "not_found"); return }
+		if r.Method != http.MethodPost { methodNotAllowed(w, "POST"); return }
+		if !h.originAllowed(r) { fail(w, http.StatusForbidden, "invalid_origin"); return }
+		h.remoteAdmin(w, r, true)
 		return
 	case "/api/web/agents":
 		if r.Method != http.MethodGet {
@@ -308,6 +336,7 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: "", Path: "/", HttpOnly: true,
 		SameSite: http.SameSiteStrictMode, MaxAge: -1,
+		Secure: h.remote != nil,
 	})
 	jsonResponse(w, http.StatusOK, map[string]bool{"authenticated": false})
 }
@@ -461,4 +490,46 @@ func (h *Handler) measurements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusOK, page)
+}
+
+
+// ServeRemote runs a direct TLS server. Never accept X-Forwarded-* as a
+// substitute for a real TLS connection; browsers connect directly.
+func ServeRemote(ctx context.Context, listener net.Listener, handler http.Handler, logger *slog.Logger, certPath, keyPath string) error {
+	if listener == nil || handler == nil || logger == nil {
+		return fmt.Errorf("dashboard listener, handler and logger required")
+	}
+	if certPath == "" || keyPath == "" {
+		_ = listener.Close()
+		return fmt.Errorf("dashboard TLS certificate and key are required")
+	}
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		_ = listener.Close()
+		return fmt.Errorf("dashboard TLS configuration: %w", err)
+	}
+	srv := &http.Server{
+		Handler: handler, ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout: 10 * time.Second, WriteTimeout: 20 * time.Second,
+		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10,
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}},
+	}
+	done := make(chan error, 1)
+	go func() { done <- srv.ServeTLS(listener, "", "") }()
+	logger.Info("HTTPS dashboard started", "listen", listener.Addr().String())
+	select {
+	case err := <-done:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := srv.Shutdown(shutdownCtx)
+		if err != nil { _ = srv.Close() }
+		serveErr := <-done
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) { return serveErr }
+		return err
+	}
 }
