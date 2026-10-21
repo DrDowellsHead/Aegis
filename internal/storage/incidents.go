@@ -245,10 +245,20 @@ func makeIncidentCursor(v Incident) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(v.OpenedAt.Format(time.RFC3339Nano) + "|" + v.ID))
 }
 
-func (p *Postgres) ListIncidents(ctx context.Context, q IncidentQuery) (IncidentPage, error) {
+// ValidateIncidentQuery is shared by the HTTP gateway and persistence layer,
+// so malformed pagination cursors are rejected before any database query.
+func ValidateIncidentQuery(q IncidentQuery) error {
 	if q.Limit < 1 || q.Limit > 100 || (q.State != "active" && q.State != "resolved" && q.State != "all") ||
 		(q.AgentID != "" && !identity.ValidID(q.AgentID)) {
-		return IncidentPage{}, fmt.Errorf("invalid incident query")
+		return fmt.Errorf("invalid incident query")
+	}
+	_, _, err := parseIncidentCursor(q.Cursor)
+	return err
+}
+
+func (p *Postgres) ListIncidents(ctx context.Context, q IncidentQuery) (IncidentPage, error) {
+	if err := ValidateIncidentQuery(q); err != nil {
+		return IncidentPage{}, err
 	}
 	at, id, err := parseIncidentCursor(q.Cursor)
 	if err != nil {
