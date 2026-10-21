@@ -30,6 +30,10 @@ type Incident struct {
 	AcknowledgedBy *string    `json:"acknowledged_by"`
 	ResolvedAt     *time.Time `json:"resolved_at"`
 	Resolution     *string    `json:"resolution"`
+	Severity string `json:"severity"`
+	EscalatedAt *time.Time `json:"escalated_at"`
+	SuppressedChecks int64 `json:"suppressed_checks"`
+	LastSuppressedAt *time.Time `json:"last_suppressed_at"`
 }
 
 type IncidentQuery struct {
@@ -53,18 +57,22 @@ type IncidentEvent struct {
 }
 
 const incidentFields = `id::text,agent_id::text,rule_id::text,kind,title,state,
-opened_at,acknowledged_at,acknowledged_by,resolved_at,resolution`
+opened_at,acknowledged_at,acknowledged_by,resolved_at,resolution,
+severity,escalated_at,suppressed_checks,last_suppressed_at`
 
 func readIncident(s interface{ Scan(...any) error }) (Incident, error) {
 	var v Incident
 	var rule, ackBy, resolution sql.NullString
-	var ack, resolved sql.NullTime
+	var ack, resolved, escalated, suppressed sql.NullTime
 	err := s.Scan(&v.ID, &v.AgentID, &rule, &v.Kind, &v.Title, &v.State,
-		&v.OpenedAt, &ack, &ackBy, &resolved, &resolution)
+		&v.OpenedAt, &ack, &ackBy, &resolved, &resolution,
+		&v.Severity, &escalated, &v.SuppressedChecks, &suppressed)
 	if err != nil {
 		return Incident{}, err
 	}
 	v.OpenedAt = v.OpenedAt.UTC()
+	if escalated.Valid {x:=escalated.Time.UTC();v.EscalatedAt=&x}
+	if suppressed.Valid {x:=suppressed.Time.UTC();v.LastSuppressedAt=&x}
 	if rule.Valid {
 		x := rule.String
 		v.RuleID = &x
@@ -99,29 +107,74 @@ func incidentEvent(ctx context.Context, tx *sql.Tx, id, action, actor, reason st
 // Partial unique indexes are an additional defense against duplicate active
 // incidents across concurrent requests or process restarts.
 func ensureIncident(ctx context.Context, tx *sql.Tx, agentID, ruleID, kind, title string, at time.Time) error {
-	var id string
-	var err error
-	if kind == "threshold" {
-		err = tx.QueryRowContext(ctx, `
-			INSERT INTO aegis_incidents(agent_id,rule_id,kind,title,opened_at)
-			VALUES($1,$2,'threshold',$3,$4)
-			ON CONFLICT (rule_id) WHERE kind='threshold' AND state<>'resolved'
-			DO NOTHING RETURNING id::text`, agentID, ruleID, title, at).Scan(&id)
+	policy, err := incidentSettingsTx(ctx,tx)
+	if err!=nil {return fmt.Errorf("load incident policy: %w",err)}
+	var id, state string
+	var opened time.Time
+	var escalated sql.NullTime
+	var source, sourceID string
+	if kind=="threshold" {
+		source,sourceID="rule_id",ruleID
 	} else {
-		err = tx.QueryRowContext(ctx, `
-			INSERT INTO aegis_incidents(agent_id,kind,title,opened_at)
-			VALUES($1,'agent_offline',$2,$3)
-			ON CONFLICT (agent_id) WHERE kind='agent_offline' AND state<>'resolved'
-			DO NOTHING RETURNING id::text`, agentID, title, at).Scan(&id)
+		source,sourceID="agent_id",agentID
 	}
-	if errors.Is(err, sql.ErrNoRows) {
+	// The selected SQL identifier is from a fixed internal enum, not input.
+	err=tx.QueryRowContext(ctx,`SELECT id::text,state,opened_at,escalated_at
+		FROM aegis_incidents WHERE `+source+`=$1 AND kind=$2
+		AND state<>'resolved' FOR UPDATE`,sourceID,kind).
+		Scan(&id,&state,&opened,&escalated)
+	switch {
+	case err==nil:
+		// Only unresolved AND unacknowledged problems escalate. Once per
+		// episode, with an event written in the same transaction.
+		if state=="open" && !escalated.Valid &&
+			!at.Before(opened.Add(time.Duration(policy.EscalateAfterSeconds)*time.Second)) {
+			_,err=tx.ExecContext(ctx,`UPDATE aegis_incidents SET severity='critical',
+				escalated_at=$2 WHERE id=$1`,id,at)
+			if err!=nil{return fmt.Errorf("escalate incident: %w",err)}
+			if err=incidentEvent(ctx,tx,id,"escalated","system","unacknowledged_timeout",at);err!=nil{
+				return fmt.Errorf("record escalation: %w",err)
+			}
+		}
 		return nil
+	case !errors.Is(err,sql.ErrNoRows):
+		return fmt.Errorf("find active incident: %w",err)
 	}
-	if err != nil {
-		return fmt.Errorf("open incident: %w", err)
+	// No active episode. Check latest resolved incident for this source.
+	// Cooldown suppresses repeat episodes without erasing their history.
+	if policy.CooldownSeconds>0 {
+		var previousID string
+		var lastResolved time.Time
+		err=tx.QueryRowContext(ctx,`SELECT id::text,resolved_at
+			FROM aegis_incidents WHERE `+source+`=$1 AND kind=$2
+			AND state='resolved' ORDER BY resolved_at DESC,id DESC LIMIT 1`,
+			sourceID,kind).Scan(&previousID,&lastResolved)
+		if err!=nil && !errors.Is(err,sql.ErrNoRows) {
+			return fmt.Errorf("read incident cooldown: %w",err)
+		}
+		if err==nil && at.Before(lastResolved.Add(time.Duration(policy.CooldownSeconds)*time.Second)){
+			_,err=tx.ExecContext(ctx,`UPDATE aegis_incidents SET
+				suppressed_checks=suppressed_checks+1,last_suppressed_at=$2 WHERE id=$1`,
+				previousID,at)
+			if err!=nil {return fmt.Errorf("record suppressed incident check: %w",err)}
+			return nil
+		}
 	}
-	if err = incidentEvent(ctx, tx, id, "opened", "system", "condition_detected", at); err != nil {
-		return fmt.Errorf("record incident opened event: %w", err)
+	if kind=="threshold" {
+		err=tx.QueryRowContext(ctx,`INSERT INTO aegis_incidents
+			(agent_id,rule_id,kind,title,opened_at) VALUES($1,$2,'threshold',$3,$4)
+			ON CONFLICT (rule_id) WHERE kind='threshold' AND state<>'resolved'
+			DO NOTHING RETURNING id::text`,agentID,ruleID,title,at).Scan(&id)
+	} else {
+		err=tx.QueryRowContext(ctx,`INSERT INTO aegis_incidents
+			(agent_id,kind,title,opened_at) VALUES($1,'agent_offline',$2,$3)
+			ON CONFLICT (agent_id) WHERE kind='agent_offline' AND state<>'resolved'
+			DO NOTHING RETURNING id::text`,agentID,title,at).Scan(&id)
+	}
+	if errors.Is(err,sql.ErrNoRows) {return nil}
+	if err!=nil {return fmt.Errorf("open incident: %w",err)}
+	if err=incidentEvent(ctx,tx,id,"opened","system","condition_detected",at);err!=nil{
+		return fmt.Errorf("record incident opened event: %w",err)
 	}
 	return nil
 }
