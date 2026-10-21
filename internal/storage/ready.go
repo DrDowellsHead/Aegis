@@ -27,7 +27,7 @@ func (p *Postgres) Ready(ctx context.Context) error {
 		Scan(&count); err != nil {
 		return fmt.Errorf("check migration ledger: %w", err)
 	}
-	if count != 11 {
+	if count != 12 {
 		return fmt.Errorf("database schema is not up to date")
 	}
 	return nil
