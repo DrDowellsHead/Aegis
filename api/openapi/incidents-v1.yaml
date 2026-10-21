@@ -34,6 +34,37 @@ paths:
       responses:
         '200': {description: Up to 100 ordered state transitions}
         '401': {description: Login required}
+  /api/web/incidents/settings:
+    get:
+      summary: Fleet incident cooldown and escalation policy (readable by viewers)
+      responses:
+        '200':
+          description: Current durable incident policy
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IncidentSettings'}
+        '401': {description: Login required}
+    post:
+      summary: Admin-only update of fleet incident policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [cooldown_seconds, escalate_after_seconds]
+              properties:
+                cooldown_seconds: {type: integer, minimum: 0, maximum: 86400}
+                escalate_after_seconds: {type: integer, minimum: 60, maximum: 604800}
+      responses:
+        '200':
+          description: Updated policy
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IncidentSettings'}
+        '400': {description: Policy is invalid}
+        '403': {description: Insufficient permissions or invalid origin}
   /api/web/incidents/evaluate:
     post:
       summary: Admin-only manual connectivity assessment
@@ -79,6 +110,13 @@ paths:
         '409': {description: Already resolved}
 components:
   schemas:
+    IncidentSettings:
+      type: object
+      required: [cooldown_seconds, escalate_after_seconds, updated_at]
+      properties:
+        cooldown_seconds: {type: integer, minimum: 0, maximum: 86400}
+        escalate_after_seconds: {type: integer, minimum: 60, maximum: 604800}
+        updated_at: {type: string, format: date-time}
     IncidentAction:
       type: object
       required: [id]
@@ -88,7 +126,8 @@ components:
     Incident:
       type: object
       required: [id, agent_id, rule_id, kind, title, state, opened_at,
-        acknowledged_at, acknowledged_by, resolved_at, resolution]
+        acknowledged_at, acknowledged_by, resolved_at, resolution,
+        severity, escalated_at, suppressed_checks, last_suppressed_at]
       properties:
         id: {type: string, format: uuid}
         agent_id: {type: string, format: uuid}
@@ -101,3 +140,7 @@ components:
         acknowledged_by: {type: [string, 'null']}
         resolved_at: {type: [string, 'null'], format: date-time}
         resolution: {type: [string, 'null']}
+        severity: {type: string, enum: [warning, critical]}
+        escalated_at: {type: [string, 'null'], format: date-time}
+        suppressed_checks: {type: integer, minimum: 0}
+        last_suppressed_at: {type: [string, 'null'], format: date-time}
