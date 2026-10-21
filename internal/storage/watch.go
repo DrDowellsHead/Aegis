@@ -131,10 +131,10 @@ func (p *Postgres) FinishWatch(ctx context.Context, status WatchProgress, succes
 	}
 	state := "ok"
 	switch {
-	case status.Errors > 0:
-		state = "partial_failure"
 	case !success:
 		state = "failed"
+	case status.Errors > 0:
+		state = "partial_failure"
 	}
 	_, err := p.db.ExecContext(ctx, `
 		UPDATE aegis_watch_status SET
