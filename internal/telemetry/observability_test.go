@@ -43,13 +43,21 @@ func TestObservedReceiverCountsGRPCSQLAndFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry, err := identity.LoadRegistry(registryPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	creds, err := identity.LoadCredentials(credentialsPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	tlsCreds, err := ServerCredentials(cert, key)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	observer := observability.New()
 	store := &monitoredStore{}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -60,12 +68,16 @@ func TestObservedReceiverCountsGRPCSQLAndFailures(t *testing.T) {
 			tlsCreds, registry, store, DefaultReceiverLimits(), observer)
 	}()
 	client, err := NewClient(l.Addr().String(), creds, ca)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer client.Close()
 	if err := client.Send(ctx, "0123456789abcdef0123456789abcdef", sample()); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.Heartbeat(ctx); err != nil { t.Fatal(err) }
+	if err := client.Heartbeat(ctx); err != nil {
+		t.Fatal(err)
+	}
 	store.reject.Store(true)
 	if err := client.Send(ctx, "1123456789abcdef0123456789abcdef", sample()); status.Code(err) != codes.Unavailable {
 		t.Fatalf("expected SQL failure mapped to Unavailable, got %v", err)
@@ -73,8 +85,10 @@ func TestObservedReceiverCountsGRPCSQLAndFailures(t *testing.T) {
 	cancel()
 	select {
 	case err := <-done:
-		if err != nil { t.Fatal(err) }
-	case <-time.After(6*time.Second):
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(6 * time.Second):
 		t.Fatal("receiver did not shut down")
 	}
 	var text strings.Builder
