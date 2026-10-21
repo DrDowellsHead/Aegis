@@ -59,7 +59,7 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusForbidden, "invalid_origin")
 		return
 	}
-	actor:="local-operator"
+	actor := "local-operator"
 	if h.remote != nil {
 		session, ok := h.remoteSession(r)
 		if !ok {
@@ -70,7 +70,7 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 			fail(w, http.StatusForbidden, "forbidden")
 			return
 		}
-		actor=session.username
+		actor = session.username
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
@@ -86,9 +86,13 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 		}
 		var newRule storage.RuleRecord
 		var err error
-		if a,ok:=store.(interface{CreateRuleAs(context.Context,storage.RuleInput,string)(storage.RuleRecord,error)});ok{
-			newRule,err=a.CreateRuleAs(ctx,input,actor)
-		}else{newRule,err=store.CreateRule(ctx,input)}
+		if a, ok := store.(interface {
+			CreateRuleAs(context.Context, storage.RuleInput, string) (storage.RuleRecord, error)
+		}); ok {
+			newRule, err = a.CreateRuleAs(ctx, input, actor)
+		} else {
+			newRule, err = store.CreateRule(ctx, input)
+		}
 		if err != nil {
 			h.ruleError(w, err)
 			return
@@ -108,9 +112,13 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 		}
 		var deleted bool
 		var err error
-		if a,ok:=store.(interface{DeleteRuleAs(context.Context,string,string)(bool,error)});ok{
-			deleted,err=a.DeleteRuleAs(ctx,body.ID,actor)
-		}else{deleted,err=store.DeleteRule(ctx,body.ID)}
+		if a, ok := store.(interface {
+			DeleteRuleAs(context.Context, string, string) (bool, error)
+		}); ok {
+			deleted, err = a.DeleteRuleAs(ctx, body.ID, actor)
+		} else {
+			deleted, err = store.DeleteRule(ctx, body.ID)
+		}
 		if err != nil {
 			h.ruleError(w, err)
 			return
@@ -134,9 +142,13 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 		}
 		var evaluated []storage.RuleRecord
 		var err error
-		if a,ok:=store.(interface{EvaluateRulesAs(context.Context,string,string)([]storage.RuleRecord,error)});ok{
-			evaluated,err=a.EvaluateRulesAs(ctx,body.AgentID,actor)
-		}else{evaluated,err=store.EvaluateRules(ctx,body.AgentID)}
+		if a, ok := store.(interface {
+			EvaluateRulesAs(context.Context, string, string) ([]storage.RuleRecord, error)
+		}); ok {
+			evaluated, err = a.EvaluateRulesAs(ctx, body.AgentID, actor)
+		} else {
+			evaluated, err = store.EvaluateRules(ctx, body.AgentID)
+		}
 		if err != nil {
 			h.ruleError(w, err)
 			return

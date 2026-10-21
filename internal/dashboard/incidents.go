@@ -155,13 +155,17 @@ func (h *Handler) incidents(w http.ResponseWriter, r *http.Request) {
 			fail(w, http.StatusBadRequest, "invalid_policy")
 			return
 		}
-		inputSettings:=storage.IncidentSettings{
+		inputSettings := storage.IncidentSettings{
 			CooldownSeconds: input.CooldownSeconds, EscalateAfterSeconds: input.EscalateAfterSeconds}
 		var settings storage.IncidentSettings
 		var err error
-		if a,ok:=store.(interface{UpdateIncidentSettingsAs(context.Context,storage.IncidentSettings,string)(storage.IncidentSettings,error)});ok{
-			settings,err=a.UpdateIncidentSettingsAs(ctx,inputSettings,actor)
-		}else{settings,err=store.UpdateIncidentSettings(ctx,inputSettings)}
+		if a, ok := store.(interface {
+			UpdateIncidentSettingsAs(context.Context, storage.IncidentSettings, string) (storage.IncidentSettings, error)
+		}); ok {
+			settings, err = a.UpdateIncidentSettingsAs(ctx, inputSettings, actor)
+		} else {
+			settings, err = store.UpdateIncidentSettings(ctx, inputSettings)
+		}
 		if err != nil {
 			h.incidentError(w, err)
 			return
@@ -196,9 +200,13 @@ func (h *Handler) incidents(w http.ResponseWriter, r *http.Request) {
 		}
 		var state string
 		var err error
-		if a,ok:=store.(interface{EvaluateAgentLivenessAs(context.Context,string,time.Duration,string)(string,error)});ok {
-			state,err=a.EvaluateAgentLivenessAs(ctx,input.AgentID,threshold,actor)
-		}else{state,err=store.EvaluateAgentLiveness(ctx,input.AgentID,threshold)}
+		if a, ok := store.(interface {
+			EvaluateAgentLivenessAs(context.Context, string, time.Duration, string) (string, error)
+		}); ok {
+			state, err = a.EvaluateAgentLivenessAs(ctx, input.AgentID, threshold, actor)
+		} else {
+			state, err = store.EvaluateAgentLiveness(ctx, input.AgentID, threshold)
+		}
 		if err != nil {
 			h.incidentError(w, err)
 			return
