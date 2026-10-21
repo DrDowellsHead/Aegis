@@ -36,5 +36,7 @@ func checkFreeSpace(dir string, recordBytes int64) error {
 	return nil
 }
 func isDiskFull(err error) bool {
-	return errors.Is(err, syscall.Errno(112)) || errors.Is(err, syscall.Errno(39))
+	return errors.Is(err, syscall.ENOSPC) ||
+		errors.Is(err, syscall.Errno(112)) ||
+		errors.Is(err, syscall.Errno(39))
 }

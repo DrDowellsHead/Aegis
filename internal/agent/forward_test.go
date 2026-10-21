@@ -90,6 +90,7 @@ func TestAuthenticationErrorIsNotRetried(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer q.Close()
 	sender := &unauthSender{}
 	err = Forward(context.Background(), &testCollector{}, sender, q,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), testOptions(1))
@@ -142,8 +143,12 @@ func TestCanceledWhileOfflineKeepsOutbox(t *testing.T) {
 func TestOptionsValidation(t *testing.T) {
 	o := testOptions(1)
 	o.RetryMin = 0
-	q, _ := spool.Open(filepath.Join(t.TempDir(), "outbox"), agentID, spool.MaxRecordBytes)
-	err := Forward(context.Background(), &testCollector{}, &failThenSend{}, q, slog.New(slog.NewTextHandler(io.Discard, nil)), o)
+	q, err := spool.Open(filepath.Join(t.TempDir(), "outbox"), agentID, spool.MaxRecordBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+	err = Forward(context.Background(), &testCollector{}, &failThenSend{}, q, slog.New(slog.NewTextHandler(io.Discard, nil)), o)
 	if err == nil || errors.Is(err, context.Canceled) {
 		t.Fatalf("invalid options accepted: %v", err)
 	}
@@ -154,6 +159,7 @@ func TestCancellationInterruptsBackoffAfterCollectionDone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer q.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	opts := testOptions(1)
