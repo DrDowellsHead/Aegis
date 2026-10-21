@@ -55,6 +55,8 @@ jobs:
           go-version: '1.27.3'
           cache: false
       - run: python3 scripts/package.py dev
+      - name: Verify platform-specific service templates in archives
+        run: python3 scripts/verify_service_archives.py dist/dev
       - name: Verify release package checksums
         shell: bash
         run: (cd dist/dev && sha256sum -c SHA256SUMS)
@@ -97,6 +99,8 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-fund
           npm audit --audit-level=high
+      - name: Validate systemd, launchd and PowerShell templates
+        run: python3 -m unittest discover -s scripts -p 'test_services.py' -v
       - name: Enforce release workflow policy
         if: always()
         run: python3 -m unittest discover -s scripts -p 'test_release_quality.py' -v

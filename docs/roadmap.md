@@ -173,7 +173,12 @@ Linux; центральный Go-сервер с PostgreSQL; веб-интерф
   (в develop; ожидает CI). Управление остальными серверными службами
   и сервисными аккаунтами — фазы 7.2–7.3.
   [Конфигурация](configuration.md).
-- 7.2: агенты как Windows Service, systemd service, launchd daemon.
+- 7.2: интеграция Windows SCM Stop/Shutdown с context.Context,
+  шаблоны непривилегированных systemd и launchd служб агента и receiver,
+  установка/удаление Windows Service через PowerShell, правила
+  перезапуска и автоматические проверки шаблонов и архивов
+  (реализовано в develop; эксплуатационные испытания — 7.8).
+  [Системные службы](services.md).
 - 7.3: Docker Compose для серверной части, схемы БД и конфигурации.
 - 7.4: Windows installer, macOS package, Linux пакеты/службы.
 - 7.5: обновление и миграция конфигураций без потери данных.

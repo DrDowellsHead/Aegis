@@ -56,6 +56,17 @@ def main():
                 shutil.copy2(root / "docs" / "metrics.md", stage / "METRICS.md")
                 shutil.copy2(root / "docs" / "configuration.md", stage / "CONFIGURATION.md")
                 shutil.copy2(root / "configs" / "aegis.example.json", stage / "aegis.example.json")
+                shutil.copy2(root / "docs" / "services.md", stage / "SERVICES.md")
+                service_source = root / "deploy" / {
+                    "linux": "systemd",
+                    "darwin": "launchd",
+                    "windows": "windows",
+                }[system]
+                service_target = stage / "SERVICE"
+                service_target.mkdir()
+                for template in sorted(service_source.iterdir()):
+                    if template.is_file():
+                        shutil.copy2(template, service_target / template.name)
                 for folder, path in licenses:
                     destination = stage / "THIRD_PARTY_LICENSES" / folder
                     destination.mkdir(parents=True, exist_ok=True)
