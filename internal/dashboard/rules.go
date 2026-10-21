@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/DrDowellsHead/Aegis/internal/alerts"
 	"github.com/DrDowellsHead/Aegis/internal/identity"
 	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
@@ -75,6 +76,10 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 	case "/api/web/rules":
 		var input storage.RuleInput
 		if !readRuleJSON(w, r, &input) {
+			return
+		}
+		if !identity.ValidID(input.AgentID) || alerts.Validate(input.Rule) != nil {
+			fail(w, http.StatusBadRequest, "invalid_rule")
 			return
 		}
 		newRule, err := store.CreateRule(ctx, input)
