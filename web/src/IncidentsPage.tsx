@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from './api/client'
 import {
   loadIncidents, changeIncident, evaluateLiveness, loadIncidentEvents,
-  getIncidentSettings, updateIncidentSettings,
+  getIncidentSettings, updateIncidentSettings, getNotificationStats, type NotificationStats,
   type Incident, type IncidentEvent, type IncidentFilter
 } from './api/incidents'
 
@@ -39,6 +39,7 @@ export default function IncidentsPage({ canManage, onExpired }: {
   const [cooldown,setCooldown]=useState('300')
   const [escalation,setEscalation]=useState('900')
   const [settingsReady,setSettingsReady]=useState(false)
+  const [delivery,setDelivery]=useState<NotificationStats|null>(null)
 
   const fail=useCallback((cause: unknown)=>{
     if (cause instanceof ApiError && cause.status===401) {onExpired();return}
@@ -49,6 +50,13 @@ export default function IncidentsPage({ canManage, onExpired }: {
       setError('Инцидент или зарегистрированный агент не найден.')
     } else setError('Не удалось выполнить запрос. Проверьте соединение с Go и PostgreSQL.')
   },[onExpired])
+
+  useEffect(()=>{
+    let cancelled=false
+    getNotificationStats().then(stats=>{if(!cancelled)setDelivery(stats)})
+      .catch(cause=>{if(!cancelled)fail(cause)})
+    return ()=>{cancelled=true}
+  },[refresh,fail])
 
   useEffect(()=>{
     let cancelled=false
@@ -176,6 +184,12 @@ export default function IncidentsPage({ canManage, onExpired }: {
           onChange={e=>setEscalation(e.target.value)}/>
         {canManage && <button type="submit" disabled={busy}>Сохранить политику</button>}
       </form>}
+    </section>
+    <section className="panel" aria-label="Доставка уведомлений">
+      <div className="panel-heading"><h2>Очередь уведомлений</h2></div>
+      <p className="muted">Email, Telegram и Webhook доставляются отдельным процессом Aegis notify. Состояния очереди сохранены в PostgreSQL.</p>
+      {delivery ? <p role="status">Ожидают: {delivery.pending} · Повтор: {delivery.retry} · В работе: {delivery.leased} · Доставлено: {delivery.sent} · Ошибки без повторов: {delivery.dead}</p> :
+        <p className="muted">Нет данных об очереди.</p>}
     </section>
     <section className="panel" aria-label="Список инцидентов">
       <div className="panel-heading"><h2>Список инцидентов</h2>
