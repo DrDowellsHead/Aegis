@@ -92,6 +92,7 @@ func runForward(ctx context.Context, args []string, errOut io.Writer) int {
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
+	defer queue.Close() // always release the process lock
 	client, err := telemetry.NewClient(*address, creds, *caPath)
 	if err != nil {
 		fmt.Fprintln(errOut, err)

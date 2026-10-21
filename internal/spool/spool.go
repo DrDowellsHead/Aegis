@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"slices"
 	"strings"
 	"sync"
@@ -24,6 +25,9 @@ const MaxRecordBytes int64 = 256 << 10 // 256 KiB per observation
 
 var ErrFull = errors.New("spool is full: measurement not enqueued")
 var ErrCorrupt = errors.New("spool contains invalid data")
+var ErrLocked = errors.New("spool is already in use")
+var ErrClosed = errors.New("spool is closed")
+var ErrDiskSpace = errors.New("spool disk space reserve would be exhausted")
 
 // Record is the stable payload and ID used on EVERY retry.
 type Record struct {
@@ -37,8 +41,7 @@ type entry struct {
 	size   int64
 }
 
-// Queue has one owning process. Multiple Queue instances for the same
-// directory are unsupported; a filesystem process lock is not yet available.
+// Queue holds an exclusive OS process lock until Close.
 type Queue struct {
 	mu      sync.Mutex
 	dir     string
@@ -46,6 +49,9 @@ type Queue struct {
 	limit   int64
 	used    int64
 	entries map[string]entry // key: on-disk filename
+	lock *os.File
+	spaceCheck func(string, int64) error
+	writeRecord func(*os.File, []byte) error
 }
 
 func validMeasurementID(id string) bool {
@@ -68,7 +74,7 @@ func validRecord(r Record, agentID string) bool {
 
 // Open recovers complete records and rejects corrupt/mismatched files.
 // An abandoned .pending-* temporary file is discarded (it was never enqueued).
-func Open(dir, agentID string, maxBytes int64) (*Queue, error) {
+func Open(dir, agentID string, maxBytes int64) (queue *Queue, err error) {
 	if dir == "" || !identity.ValidID(agentID) || maxBytes < MaxRecordBytes {
 		return nil, fmt.Errorf("spool requires directory, valid agent ID and maxBytes >= %d", MaxRecordBytes)
 	}
@@ -82,7 +88,38 @@ func Open(dir, agentID string, maxBytes int64) (*Queue, error) {
 	if !info.IsDir() || runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
 		return nil, fmt.Errorf("spool directory must be a private regular directory")
 	}
-	q := &Queue{dir: dir, agentID: agentID, limit: maxBytes, entries: make(map[string]entry)}
+
+	lockPath := filepath.Join(dir, ".aegis.lock")
+	if info, statErr := os.Lstat(lockPath); statErr == nil {
+		if !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
+			return nil, fmt.Errorf("%w: unsafe lock file", ErrCorrupt)
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return nil, fmt.Errorf("inspect spool lock: %w", statErr)
+	}
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil { return nil, fmt.Errorf("open spool lock: %w", err) }
+	openedInfo, openedErr := lock.Stat()
+	pathInfo, pathErr := os.Lstat(lockPath)
+	if openedErr != nil || pathErr != nil || !openedInfo.Mode().IsRegular() ||
+		!pathInfo.Mode().IsRegular() || !os.SameFile(openedInfo, pathInfo) ||
+		runtime.GOOS != "windows" && openedInfo.Mode().Perm()&0077 != 0 {
+		_ = lock.Close()
+		return nil, fmt.Errorf("%w: unsafe lock file", ErrCorrupt)
+	}
+	if err = lockFile(lock); err != nil {
+		_ = lock.Close()
+		return nil, fmt.Errorf("%w: %v", ErrLocked, err)
+	}
+	defer func() {
+		if err != nil {
+			_ = unlockFile(lock)
+			_ = lock.Close()
+		}
+	}()
+	q := &Queue{dir: dir, agentID: agentID, limit: maxBytes,
+		entries: make(map[string]entry), lock: lock,
+		spaceCheck: checkFreeSpace, writeRecord: writeRecord}
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -90,6 +127,7 @@ func Open(dir, agentID string, maxBytes int64) (*Queue, error) {
 	for _, file := range files {
 		name := file.Name()
 		full := filepath.Join(dir, name)
+		if name == ".aegis.lock" { continue }
 		if strings.HasPrefix(name, ".pending-") {
 			if !file.Type().IsRegular() {
 				return nil, fmt.Errorf("%w: unsafe temporary file", ErrCorrupt)
@@ -125,7 +163,31 @@ func Open(dir, agentID string, maxBytes int64) (*Queue, error) {
 		q.entries[name] = entry{record: r, size: int64(len(raw))}
 		q.used += int64(len(raw))
 	}
-	return q, nil
+return q, nil
+}
+
+// Close releases the OS lock. The lock file must not be deleted.
+func (q *Queue) Close() error {
+	if q == nil { return nil }
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.lock == nil { return nil }
+	err := unlockFile(q.lock)
+	closeErr := q.lock.Close()
+	q.lock = nil
+	return errors.Join(err, closeErr)
+}
+
+func writeRecord(file *os.File, data []byte) error {
+	n, err := file.Write(data)
+	if err != nil { return err }
+	if n != len(data) { return syscall.ENOSPC }
+	return nil
+}
+
+func spoolIOError(action string, err error) error {
+	if isDiskFull(err) { return fmt.Errorf("%s: %w", action, errors.Join(ErrDiskSpace, err)) }
+	return fmt.Errorf("%s: %w", action, err)
 }
 
 func newID() (string, error) {
@@ -161,32 +223,34 @@ func (q *Queue) Append(snapshot metrics.Snapshot) (Record, error) {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.lock == nil { return Record{}, ErrClosed }
 	if q.used > q.limit-int64(len(data)) {
 		return Record{}, ErrFull
 	}
+	if err := q.spaceCheck(q.dir, int64(len(data))); err != nil { return Record{}, spoolIOError("check spool free space", err) }
 	file, err := os.CreateTemp(q.dir, ".pending-")
 	if err != nil {
-		return Record{}, fmt.Errorf("create spool temp: %w", err)
+		return Record{}, spoolIOError("create spool temp", err)
 	}
 	defer os.Remove(file.Name())
 	if err := file.Chmod(0600); err != nil {
 		_ = file.Close()
 		return Record{}, err
 	}
-	if _, err := file.Write(data); err != nil {
+	if err := q.writeRecord(file, data); err != nil {
 		_ = file.Close()
-		return Record{}, err
+		return Record{}, spoolIOError("write spool record", err)
 	}
 	if err := file.Sync(); err != nil {
 		_ = file.Close()
-		return Record{}, err
+		return Record{}, spoolIOError("sync spool record", err)
 	}
 	if err := file.Close(); err != nil {
-		return Record{}, err
+		return Record{}, spoolIOError("close spool record", err)
 	}
 	name := time.Now().UTC().Format("20060102T150405.000000000Z") + "_" + id + ".json"
 	if err := os.Rename(file.Name(), filepath.Join(q.dir, name)); err != nil {
-		return Record{}, fmt.Errorf("commit spool record: %w", err)
+		return Record{}, spoolIOError("commit spool record", err)
 	}
 	// This sync is not available on every filesystem; file data already synced.
 	if directory, err := os.Open(q.dir); err == nil {
@@ -241,6 +305,7 @@ func (q *Queue) Peek() (Record, bool) {
 func (q *Queue) Ack(measurementID string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.lock == nil { return ErrClosed }
 	for name, item := range q.entries {
 		if item.record.MeasurementID != measurementID {
 			continue
