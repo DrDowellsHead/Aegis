@@ -66,7 +66,9 @@ func testDashboard(t *testing.T) (*Handler, *stub) {
 }
 func request(h http.Handler, method, path, body, origin string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "http://127.0.0.1:8082"+path, strings.NewReader(body))
-	if method == http.MethodPost { r.Header.Set("Content-Type", "application/json") }
+	if method == http.MethodPost {
+		r.Header.Set("Content-Type", "application/json")
+	}
 	if origin != "" {
 		r.Header.Set("Origin", origin)
 	}
