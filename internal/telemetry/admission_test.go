@@ -134,3 +134,63 @@ func TestReceiverCanceledAdmission(t *testing.T) {
 		t.Fatalf("canceled heartbeat accepted: %v", err)
 	}
 }
+
+// Test two independent limits: the global pool must not let one agent
+// monopolize all writers, and busy telemetry must not starve heartbeats.
+func TestReceiverAdmissionPerAgentFairnessAndPermitRelease(t *testing.T) {
+	a := newReceiverAdmission(ReceiverLimits{
+		Measurements: 2,
+		PerAgent:     1,
+		Heartbeats:   1,
+	})
+	ctx := context.Background()
+	first, err := a.takeMeasurement(ctx, "agent-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One agent cannot use the spare global slot twice.
+	if release, err := a.takeMeasurement(ctx, "agent-a"); status.Code(err) != codes.ResourceExhausted {
+		if release != nil {
+			release()
+		}
+		t.Fatalf("same agent acquired a second permit: %v", err)
+	}
+	second, err := a.takeMeasurement(ctx, "agent-b")
+	if err != nil {
+		first()
+		t.Fatal(err)
+	}
+	// Global saturation rejects new agents even if their per-agent quota is unused.
+	if release, err := a.takeMeasurement(ctx, "agent-c"); status.Code(err) != codes.ResourceExhausted {
+		if release != nil {
+			release()
+		}
+		t.Fatalf("global quota exceeded: %v", err)
+	}
+	heartbeatRelease, err := a.takeHeartbeat(ctx)
+	if err != nil {
+		t.Fatalf("telemetry starved heartbeat: %v", err)
+	}
+	if release, err := a.takeHeartbeat(ctx); status.Code(err) != codes.ResourceExhausted {
+		if release != nil {
+			release()
+		}
+		t.Fatalf("heartbeat quota exceeded: %v", err)
+	}
+	heartbeatRelease()
+	// Freeing an agent's slot must free both their per-agent quota and a
+	// global slot, without affecting an unrelated in-flight agent.
+	first()
+	newFirst, err := a.takeMeasurement(ctx, "agent-a")
+	if err != nil {
+		second()
+		t.Fatalf("agent quota was not released: %v", err)
+	}
+	newFirst()
+	second()
+	final, err := a.takeMeasurement(ctx, "agent-c")
+	if err != nil {
+		t.Fatalf("global slot was not released: %v", err)
+	}
+	final()
+}
