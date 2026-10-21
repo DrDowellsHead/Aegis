@@ -183,7 +183,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/api/web/incidents", "/api/web/incidents/events",
 		"/api/web/incidents/evaluate", "/api/web/incidents/acknowledge",
 		"/api/web/incidents/resolve":
-		h.incidents(w,r)
+		h.incidents(w, r)
 		return
 	case "/api/web/rules", "/api/web/rules/delete", "/api/web/rules/evaluate":
 		h.rules(w, r)

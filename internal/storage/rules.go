@@ -160,22 +160,40 @@ func (p *Postgres) ListRules(ctx context.Context, agentID string) ([]RuleRecord,
 }
 
 func (p *Postgres) DeleteRule(ctx context.Context, ruleID string) (bool, error) {
-	if !identity.ValidID(ruleID) { return false, fmt.Errorf("invalid rule ID") }
-	if p==nil || p.db==nil {return false,fmt.Errorf("database unavailable")}
-	tx,err:=p.db.BeginTx(ctx,nil)
-	if err!=nil {return false,err}
+	if !identity.ValidID(ruleID) {
+		return false, fmt.Errorf("invalid rule ID")
+	}
+	if p == nil || p.db == nil {
+		return false, fmt.Errorf("database unavailable")
+	}
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
 	defer tx.Rollback()
 	var agentID string
-	err=tx.QueryRowContext(ctx,`SELECT agent_id::text FROM aegis_threshold_rules
-		WHERE id=$1 FOR UPDATE`,ruleID).Scan(&agentID)
-	if errors.Is(err,sql.ErrNoRows){return false,nil}
-	if err!=nil{return false,err}
+	err = tx.QueryRowContext(ctx, `SELECT agent_id::text FROM aegis_threshold_rules
+		WHERE id=$1 FOR UPDATE`, ruleID).Scan(&agentID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
 	var at time.Time
-	if err=tx.QueryRowContext(ctx,"SELECT clock_timestamp()").Scan(&at);err!=nil{return false,err}
-	if err=resolveIncident(ctx,tx,agentID,ruleID,"threshold","rule_deleted",at.UTC());err!=nil{return false,err}
-	if _,err=tx.ExecContext(ctx,"DELETE FROM aegis_threshold_rules WHERE id=$1",ruleID);err!=nil{return false,err}
-	if err=tx.Commit();err!=nil{return false,err}
-	return true,nil
+	if err = tx.QueryRowContext(ctx, "SELECT clock_timestamp()").Scan(&at); err != nil {
+		return false, err
+	}
+	if err = resolveIncident(ctx, tx, agentID, ruleID, "threshold", "rule_deleted", at.UTC()); err != nil {
+		return false, err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM aegis_threshold_rules WHERE id=$1", ruleID); err != nil {
+		return false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func aggregateRule(ctx context.Context, tx *sql.Tx, r RuleRecord, at time.Time) (alerts.Observation, error) {
@@ -272,11 +290,13 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 		// The incident and its state transition are committed in the very
 		// same transaction as the rule latch; no half-written incidents.
 		if out.Firing {
-			err=ensureIncident(ctx,tx,r.AgentID,r.ID,"threshold",r.Name,at)
+			err = ensureIncident(ctx, tx, r.AgentID, r.ID, "threshold", r.Name, at)
 		} else {
-			err=resolveIncident(ctx,tx,r.AgentID,r.ID,"threshold","condition_recovered",at)
+			err = resolveIncident(ctx, tx, r.AgentID, r.ID, "threshold", "condition_recovered", at)
 		}
-		if err!=nil {return nil,fmt.Errorf("synchronize rule incident: %w",err)}
+		if err != nil {
+			return nil, fmt.Errorf("synchronize rule incident: %w", err)
+		}
 		if out.Firing != r.Firing {
 			changed := at
 			r.ChangedAt = &changed
