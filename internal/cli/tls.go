@@ -30,15 +30,17 @@ func runTLS(args []string, out, errOut io.Writer) int {
 		warn := flags.Duration("warn-before", 30*24*time.Hour,
 			"report expiry when time remaining is at or below this duration")
 		if err := flags.Parse(args[1:]); err != nil {
-			if errors.Is(err, flag.ErrHelp) { return 0 }
+			if errors.Is(err, flag.ErrHelp) {
+				return 0
+			}
 			return 2
 		}
-		if flags.NArg()!=0 || *cert=="" || *key=="" || *host=="" ||
-			*warn<0 || *warn>365*24*time.Hour {
+		if flags.NArg() != 0 || *cert == "" || *key == "" || *host == "" ||
+			*warn < 0 || *warn > 365*24*time.Hour {
 			fmt.Fprintln(errOut, "tls check requires --tls-cert, --tls-key, --host and valid --warn-before")
 			return 2
 		}
-		report, err := identity.ValidateServerCertificate(*cert,*key,*ca,*host,*warn)
+		report, err := identity.ValidateServerCertificate(*cert, *key, *ca, *host, *warn)
 		if err != nil {
 			fmt.Fprintln(errOut, "TLS certificate check failed:", err)
 			return 1
@@ -59,19 +61,21 @@ func runTLS(args []string, out, errOut io.Writer) int {
 		next := flags.String("next-ca", "", "new CA PEM, independently verified")
 		output := flags.String("output", "", "NEW combined CA bundle path")
 		if err := flags.Parse(args[1:]); err != nil {
-			if errors.Is(err, flag.ErrHelp) { return 0 }
+			if errors.Is(err, flag.ErrHelp) {
+				return 0
+			}
 			return 2
 		}
-		if flags.NArg()!=0 || *current=="" || *next=="" || *output=="" {
+		if flags.NArg() != 0 || *current == "" || *next == "" || *output == "" {
 			fmt.Fprintln(errOut, "tls bundle requires --current-ca, --next-ca and --output")
 			return 2
 		}
-		count,err:=identity.MergeTrustBundles(*current,*next,*output)
-		if err!=nil {
+		count, err := identity.MergeTrustBundles(*current, *next, *output)
+		if err != nil {
 			fmt.Fprintln(errOut, "TLS trust bundle failed:", err)
 			return 1
 		}
-		fmt.Fprintf(out,"Created a new CA trust bundle containing %d distinct CAs. Verify new CA fingerprint before distributing; restart agent processes to load it.\n",count)
+		fmt.Fprintf(out, "Created a new CA trust bundle containing %d distinct CAs. Verify new CA fingerprint before distributing; restart agent processes to load it.\n", count)
 		return 0
 	default:
 		fmt.Fprintln(errOut, "tls requires check or bundle")

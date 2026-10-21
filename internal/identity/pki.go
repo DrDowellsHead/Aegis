@@ -62,11 +62,11 @@ func ValidateServerCertificate(certPath, keyPath, rootsPath, hostname string, wa
 	report := ServerCertificateReport{
 		Subject: leaf.Subject.String(), SerialNumber: leaf.SerialNumber.String(),
 		SHA256Fingerprint: hex.EncodeToString(sha256Sum(leaf.Raw)),
-		DNSNames: append([]string{}, leaf.DNSNames...),
-		IPAddresses: make([]string, 0, len(leaf.IPAddresses)),
-		NotBefore: leaf.NotBefore.UTC(), NotAfter: leaf.NotAfter.UTC(),
+		DNSNames:          append([]string{}, leaf.DNSNames...),
+		IPAddresses:       make([]string, 0, len(leaf.IPAddresses)),
+		NotBefore:         leaf.NotBefore.UTC(), NotAfter: leaf.NotAfter.UTC(),
 		RemainingSeconds: int64(leaf.NotAfter.Sub(now).Seconds()),
-		Expiring: leaf.NotAfter.Sub(now) <= warnBefore,
+		Expiring:         leaf.NotAfter.Sub(now) <= warnBefore,
 	}
 	for _, ip := range leaf.IPAddresses {
 		report.IPAddresses = append(report.IPAddresses, ip.String())
@@ -231,8 +231,12 @@ func MergeTrustBundles(currentPath, nextPath, destination string) (int, error) {
 
 func sameAbsolutePath(a, b string) (bool, error) {
 	first, err := filepath.Abs(a)
-	if err != nil { return false, err }
+	if err != nil {
+		return false, err
+	}
 	second, err := filepath.Abs(b)
-	if err != nil { return false, err }
+	if err != nil {
+		return false, err
+	}
 	return first == second, nil
 }

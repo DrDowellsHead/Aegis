@@ -293,11 +293,13 @@ func sortAccounts(users []map[string]any) {
 // The trust chain is optional for public-CA deployments; use
 // CheckServerCertificateWithCA to explicitly pin a CA bundle.
 func CheckServerCertificate(certPath, keyPath, publicOrigin string) error {
-	return CheckServerCertificateWithCA(certPath,keyPath,"",publicOrigin)
+	return CheckServerCertificateWithCA(certPath, keyPath, "", publicOrigin)
 }
-func CheckServerCertificateWithCA(certPath,keyPath,caPath,publicOrigin string) error {
-	if _,err:=validatePublicOrigin(publicOrigin);err!=nil{return err}
-	u,_:=url.Parse(publicOrigin)
-	_,err:=identity.ValidateServerCertificate(certPath,keyPath,caPath,u.Hostname(),0)
+func CheckServerCertificateWithCA(certPath, keyPath, caPath, publicOrigin string) error {
+	if _, err := validatePublicOrigin(publicOrigin); err != nil {
+		return err
+	}
+	u, _ := url.Parse(publicOrigin)
+	_, err := identity.ValidateServerCertificate(certPath, keyPath, caPath, u.Hostname(), 0)
 	return err
 }

@@ -28,9 +28,9 @@ func ServerCredentialsForHost(certPath, keyPath, rootsPath, hostname string) (cr
 		return nil, fmt.Errorf("load TLS certificate: %w", err)
 	}
 	return credentials.NewTLS(&tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{pair},
-		NextProtos: []string{"h2"},
+		NextProtos:   []string{"h2"},
 	}), nil
 }
 
@@ -43,7 +43,7 @@ func ClientCredentials(caPath string) (credentials.TransportCredentials, error) 
 	}
 	return credentials.NewTLS(&tls.Config{
 		MinVersion: tls.VersionTLS12,
-		RootCAs: roots,
+		RootCAs:    roots,
 		NextProtos: []string{"h2"},
 	}), nil
 }
