@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import AgentDetail from './AgentDetail'
+import AdminSettings from './AdminSettings'
 import type { AgentInfo, AgentPage, AgentStatus } from './api/types'
 import {
   ApiError, checkSession, signIn, signOut, loadAgents, loadSummary,
-  type AgentSummary
+  type AgentSummary, type DashboardSession
 } from './api/client'
 
 type Page = 'overview' | 'agents' | 'agent-detail' | 'incidents' | 'settings' | 'not-found'
@@ -13,7 +14,7 @@ const navigation = [
   { path: '/', label: 'Обзор', symbol: '◉' },
   { path: '/agents', label: 'Агенты', symbol: '▦' },
   { path: '/incidents', label: 'Инциденты', symbol: '◇', future: true },
-  { path: '/settings', label: 'Настройки', symbol: '⚙', future: true }
+  { path: '/settings', label: 'Настройки', symbol: '⚙' }
 ]
 
 function route(path: string): Page {
@@ -77,34 +78,39 @@ function AgentRows({ agents }: { agents: AgentInfo[] }) {
     </tr>)}</tbody>
   </table></div>
 }
-function Login({ onLogin, busy, error }: {
-  onLogin: (token: string) => Promise<void>; busy: boolean; error: string
+function Login({ onLogin, busy, error, mode }: {
+  onLogin: (username: string, token: string) => Promise<void>; busy: boolean; error: string
+  mode: 'local' | 'remote'
 }) {
+  const [username, setUsername] = useState('')
   const [token, setToken] = useState('')
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const value = token
     setToken('')
-    await onLogin(value)
+    await onLogin(username, value)
   }
   return <main className="login-page">
     <div className="login-card">
       <div className="brand-name">AEGIS<span className="brand-dot">.</span></div>
       <p className="eyebrow">ЛОКАЛЬНАЯ ПАНЕЛЬ МОНИТОРИНГА</p>
       <h1>Вход в Aegis</h1>
-      <p className="muted">Введите отдельный токен панели, настроенный на Go-сервере.
-        Он используется только для входа и не сохраняется браузером.</p>
+      <p className="muted">{mode === 'remote' ? 'Введите имя пользователя и пароль. Пароль не сохраняется в браузере.' :
+          'Введите отдельный токен панели, настроенный на Go-сервере. Он используется только для входа и не сохраняется браузером.'}</p>
       <form onSubmit={submit} className="login-form">
-        <label htmlFor="dashboard-token">Токен панели</label>
-        <input id="dashboard-token" type="password" autoComplete="off" value={token}
-          onChange={e => setToken(e.target.value)} minLength={32} maxLength={4096}
+        {mode === 'remote' && <><label htmlFor="dashboard-username">Пользователь</label>
+          <input id="dashboard-username" type="text" autoComplete="username" required
+            minLength={3} maxLength={32} value={username} onChange={e => setUsername(e.target.value)} /></>}
+        <label htmlFor="dashboard-token">{mode === 'remote' ? 'Пароль' : 'Токен панели'}</label>
+        <input id="dashboard-token" type="password" autoComplete={mode === 'remote' ? 'current-password' : 'off'} value={token}
+          onChange={e => setToken(e.target.value)} minLength={mode === 'remote' ? 16 : 32} maxLength={4096}
           required aria-invalid={error ? true : undefined} />
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="primary-button" type="submit" disabled={busy}>
           {busy ? 'Проверяем…' : 'Войти'}
         </button>
       </form>
-      <p className="muted small">Доступен только с самого компьютера сервера.</p>
+      <p className="muted small">{mode === 'remote' ? 'HTTPS · защищённая серверная сессия' : 'Доступен только с самого компьютера сервера.'}</p>
     </div>
   </main>
 }
@@ -113,6 +119,7 @@ export default function App() {
   const [path, setPath] = useState(() => window.location.pathname)
   const page = route(path)
   const [auth, setAuth] = useState<AuthState>('checking')
+  const [session, setSession] = useState<DashboardSession>({authenticated: false, mode: 'local'})
   const [loginBusy, setLoginBusy] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [offlineAfter, setOfflineAfter] = useState('1m')
@@ -135,7 +142,11 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    checkSession(controller.signal).then(ok => setAuth(ok ? 'authenticated' : 'anonymous'))
+    checkSession(controller.signal).then(info => {
+      if (controller.signal.aborted) return
+      setSession(info)
+      setAuth(info.authenticated ? 'authenticated' : 'anonymous')
+    })
       .catch(() => { if (!controller.signal.aborted) setAuth('unavailable') })
     return () => controller.abort()
   }, [])
@@ -180,10 +191,13 @@ export default function App() {
     }
   }, [auth])
 
-  async function onLogin(token: string) {
+  async function onLogin(username: string, token: string) {
     setLoginBusy(true); setLoginError('')
     try {
-      await signIn(token)
+      await signIn(token, session.mode === 'remote' ? username : undefined)
+      const next = await checkSession()
+      if (!next.authenticated) throw new Error('Session was not established')
+      setSession(next)
       setAuth('authenticated')
       setCursorStack([])
       setLoadedKey('')
@@ -221,7 +235,7 @@ export default function App() {
       {auth === 'unavailable' && <button className="primary-button" onClick={() => window.location.reload()}>Повторить</button>}
     </div></div>
   }
-  if (auth === 'anonymous') return <Login onLogin={onLogin} busy={loginBusy} error={loginError} />
+  if (auth === 'anonymous') return <Login mode={session.mode} onLogin={onLogin} busy={loginBusy} error={loginError} />
 
   const currentPage = loadedKey === queryKey ? agents : null
   const currentSummary = loadedKey === queryKey ? summary : null
@@ -273,7 +287,7 @@ export default function App() {
           </a>
         })}
       </nav>
-      <div className="sidebar-footer"><div><strong>Локальный доступ</strong><span>Защищённая сессия · 4.2</span></div></div>
+      <div className="sidebar-footer"><div><strong>{session.mode === 'remote' ? 'HTTPS-подключение' : 'Локальный доступ'}</strong><span>{session.username ? `${session.username} · ${session.role}` : 'Защищённая сессия'} · 4.6</span></div></div>
     </aside>
     <div className="main-layout">
       <header className="topbar">
@@ -310,7 +324,8 @@ export default function App() {
         </>}
         {page === 'agent-detail' && <AgentDetail
           id={path.slice('/agents/'.length)} refresh={refresh} onExpired={onExpired} />}
-        {(page === 'incidents' || page === 'settings') && <Panel title={title} note="Будущий этап">
+        {page === 'settings' && <AdminSettings session={session} onExpired={onExpired} />}
+        {page === 'incidents' && <Panel title={title} note="Будущий этап">
           <Empty title="В разработке" text="Этот раздел появится на следующем этапе Aegis." />
         </Panel>}
         {page === 'not-found' && <Panel title="Страница не найдена">
