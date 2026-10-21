@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "receiver": {
+    "listen": "0.0.0.0:9090",
+    "tls_cert_file": "/run/aegis/receiver/tls.crt",
+    "tls_key_file": "/run/aegis/receiver/tls.key",
+    "agents_file": "/run/aegis/receiver/agents.json",
+    "max_inflight_samples": 8,
+    "max_inflight_heartbeats": 2,
+    "max_per_agent_samples": 2
+  }
+}

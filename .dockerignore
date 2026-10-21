@@ -1,0 +1,14 @@
+.git
+.github
+dist
+bin
+coverage
+*.log
+*.local.json
+**/node_modules
+web/dist
+web/test-results
+web/playwright-report
+deploy/compose/private
+deploy/compose/.env
+**/.DS_Store

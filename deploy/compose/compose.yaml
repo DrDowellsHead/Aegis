@@ -1,0 +1,146 @@
+name: aegis
+
+x-app-base: &app-base
+  image: aegis-server:${AEGIS_IMAGE_TAG:-dev}
+  build:
+    context: ../..
+    dockerfile: deploy/compose/Dockerfile
+  user: "10001:10001"
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,size=16m
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  stop_grace_period: 45s
+  restart: unless-stopped
+
+x-database-secret: &database-secret
+  type: bind
+  source: ./private/db-url
+  target: /run/aegis/db-url
+  read_only: true
+
+x-database-environment: &database-environment
+  AEGIS_DATABASE_URL_FILE: /run/aegis/db-url
+
+x-migrated: &migrated
+  postgres:
+    condition: service_healthy
+  migrate:
+    condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: aegis
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD_FILE: /run/aegis/postgres-password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: ./private/postgres-password
+        target: /run/aegis/postgres-password
+        read_only: true
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 20s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    security_opt: [no-new-privileges:true]
+    ports: []
+
+  migrate:
+    <<: *app-base
+    command: ["migrate"]
+    restart: "no"
+    environment: *database-environment
+    volumes:
+      - *database-secret
+    networks: [backend]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  receiver:
+    <<: *app-base
+    command: ["start", "--config", "/etc/aegis/receiver.json", "--component", "receiver"]
+    environment: *database-environment
+    volumes:
+      - *database-secret
+      - ./config/receiver.json:/etc/aegis/receiver.json:ro
+      - ./private/receiver:/run/aegis/receiver:ro
+    ports:
+      - "${AEGIS_GRPC_BIND_IP:-0.0.0.0}:${AEGIS_GRPC_PORT:-9090}:9090"
+    networks: [backend, edge]
+    depends_on: *migrated
+
+  watch:
+    <<: *app-base
+    command: ["watch", "--interval", "30s", "--offline-after", "90s"]
+    environment: *database-environment
+    volumes:
+      - *database-secret
+    networks: [backend]
+    depends_on: *migrated
+
+  notify:
+    <<: *app-base
+    profiles: [notifications]
+    command:
+      - "notify"
+      - "--telegram-chat-id"
+      - "${AEGIS_TELEGRAM_CHAT_ID:-}"
+      - "--poll"
+      - "3s"
+    environment:
+      AEGIS_DATABASE_URL_FILE: /run/aegis/db-url
+      AEGIS_TELEGRAM_TOKEN_FILE: /run/aegis/notify/telegram-token
+    volumes:
+      - *database-secret
+      - ./private/notify:/run/aegis/notify:ro
+    networks: [backend, outbound]
+    depends_on: *migrated
+
+  dashboard:
+    <<: *app-base
+    profiles: [dashboard]
+    command:
+      - "dashboard"
+      - "--remote"
+      - "--listen"
+      - "0.0.0.0:8443"
+      - "--static-dir"
+      - "/opt/aegis/web/dist"
+      - "--public-origin"
+      - "${AEGIS_DASHBOARD_ORIGIN:-https://localhost:8443}"
+      - "--users-file"
+      - "/run/aegis/dashboard/users.json"
+      - "--tls-cert"
+      - "/run/aegis/dashboard/tls.crt"
+      - "--tls-key"
+      - "/run/aegis/dashboard/tls.key"
+    environment: *database-environment
+    volumes:
+      - *database-secret
+      - ./private/dashboard:/run/aegis/dashboard:ro
+    ports:
+      - "${AEGIS_DASHBOARD_BIND_IP:-127.0.0.1}:${AEGIS_DASHBOARD_PORT:-8443}:8443"
+    networks: [backend, edge]
+    depends_on: *migrated
+
+volumes:
+  postgres_data:
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+  outbound: {}

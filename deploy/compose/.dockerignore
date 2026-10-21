@@ -1,0 +1,2 @@
+# For the standalone context this file is documentation; the active ignore
+# file is the root .dockerignore because Docker build context is ../..
