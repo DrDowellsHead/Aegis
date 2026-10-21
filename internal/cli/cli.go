@@ -78,6 +78,8 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return runDashboard(ctx, args[1:], errOut)
 	case "notify":
 		return runNotify(ctx, args[1:], out, errOut)
+	case "watch":
+		return runWatch(ctx, args[1:], out, errOut)
 	case "history":
 		return runHistory(ctx, args[1:], errOut)
 	case "migrate":
@@ -127,5 +129,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|notify|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|notify|watch|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|provision|cert|check|collect|agent|version|help> [options]")
 }
