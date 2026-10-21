@@ -77,26 +77,40 @@ func rejectDuplicates(raw []byte) error {
 	var walk func() error
 	walk = func() error {
 		v, err := d.Token()
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		delim, ok := v.(json.Delim)
-		if !ok { return nil }
+		if !ok {
+			return nil
+		}
 		switch delim {
 		case '{':
 			seen := make(map[string]bool)
 			for d.More() {
 				keyValue, err := d.Token()
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 				key, ok := keyValue.(string)
-				if !ok { return fmt.Errorf("invalid JSON key") }
-				if seen[key] { return fmt.Errorf("duplicate JSON key %q", key) }
+				if !ok {
+					return fmt.Errorf("invalid JSON key")
+				}
+				if seen[key] {
+					return fmt.Errorf("duplicate JSON key %q", key)
+				}
 				seen[key] = true
-				if err := walk(); err != nil { return err }
+				if err := walk(); err != nil {
+					return err
+				}
 			}
 			_, err := d.Token()
 			return err
 		case '[':
 			for d.More() {
-				if err := walk(); err != nil { return err }
+				if err := walk(); err != nil {
+					return err
+				}
 			}
 			_, err := d.Token()
 			return err
@@ -108,7 +122,9 @@ func rejectDuplicates(raw []byte) error {
 }
 
 func resolvePath(base, path string) string {
-	if path == "" || filepath.IsAbs(path) { return path }
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
 	return filepath.Clean(filepath.Join(base, path))
 }
 
@@ -133,23 +149,31 @@ func validPath(s string) bool {
 
 func validAddress(address string) bool {
 	host, port, err := net.SplitHostPort(address)
-	if err != nil || host == "" || port == "" { return false }
+	if err != nil || host == "" || port == "" {
+		return false
+	}
 	number, err := strconv.Atoi(port)
 	return err == nil && number >= 1 && number <= 65535
 }
 
 func betweenDuration(value string, min, max time.Duration, zeroOK bool) bool {
 	d, err := time.ParseDuration(value)
-	if err != nil { return false }
+	if err != nil {
+		return false
+	}
 	return zeroOK && d == 0 || d >= min && d <= max
 }
 
 func (a Agent) Validate() error {
-	if !validAddress(a.Server) { return fmt.Errorf("agent.server must be host:port") }
+	if !validAddress(a.Server) {
+		return fmt.Errorf("agent.server must be host:port")
+	}
 	if !validPath(a.CredentialsFile) || !validPath(a.CACertFile) || !validPath(a.Disk) {
 		return fmt.Errorf("agent requires credentials_file, ca_cert_file and disk paths")
 	}
-	if a.QueueDir != "" && !validPath(a.QueueDir) { return fmt.Errorf("invalid agent.queue_dir") }
+	if a.QueueDir != "" && !validPath(a.QueueDir) {
+		return fmt.Errorf("invalid agent.queue_dir")
+	}
 	if !betweenDuration(a.Interval, 100*time.Millisecond, 24*time.Hour, false) {
 		return fmt.Errorf("agent.interval must be 100ms..24h")
 	}
@@ -166,7 +190,9 @@ func (a Agent) Validate() error {
 }
 
 func (r Receiver) Validate() error {
-	if !validAddress(r.Listen) { return fmt.Errorf("receiver.listen must be host:port") }
+	if !validAddress(r.Listen) {
+		return fmt.Errorf("receiver.listen must be host:port")
+	}
 	if !validPath(r.TLSCertFile) || !validPath(r.TLSKeyFile) || !validPath(r.AgentsFile) {
 		return fmt.Errorf("receiver requires tls_cert_file, tls_key_file, agents_file")
 	}
@@ -191,37 +217,59 @@ func (r Receiver) Validate() error {
 // Load validates the entire configuration before starting a process. Paths
 // are resolved relative to the config file, not the caller's working directory.
 func Load(filename string) (Config, error) {
-	if filename == "" { return Config{}, fmt.Errorf("--config is required") }
+	if filename == "" {
+		return Config{}, fmt.Errorf("--config is required")
+	}
 	info, err := os.Lstat(filename)
-	if err != nil { return Config{}, fmt.Errorf("open configuration: %w", err) }
+	if err != nil {
+		return Config{}, fmt.Errorf("open configuration: %w", err)
+	}
 	if !info.Mode().IsRegular() || info.Size() > maxConfigSize {
 		return Config{}, fmt.Errorf("configuration must be a regular file of at most 64 KiB")
 	}
 	raw, err := os.ReadFile(filename)
-	if err != nil { return Config{}, fmt.Errorf("read configuration: %w", err) }
-	if len(raw) > maxConfigSize { return Config{}, fmt.Errorf("configuration exceeds 64 KiB") }
-	if err := rejectDuplicates(raw); err != nil { return Config{}, err }
+	if err != nil {
+		return Config{}, fmt.Errorf("read configuration: %w", err)
+	}
+	if len(raw) > maxConfigSize {
+		return Config{}, fmt.Errorf("configuration exceeds 64 KiB")
+	}
+	if err := rejectDuplicates(raw); err != nil {
+		return Config{}, err
+	}
 	var envelope struct {
-		Version int             `json:"version"`
-		Agent json.RawMessage   `json:"agent"`
+		Version  int             `json:"version"`
+		Agent    json.RawMessage `json:"agent"`
 		Receiver json.RawMessage `json:"receiver"`
 	}
-	if err := decodeStrict(raw, &envelope); err != nil { return Config{}, err }
-	if envelope.Version != 1 { return Config{}, fmt.Errorf("configuration version must be 1") }
+	if err := decodeStrict(raw, &envelope); err != nil {
+		return Config{}, err
+	}
+	if envelope.Version != 1 {
+		return Config{}, fmt.Errorf("configuration version must be 1")
+	}
 	var cfg Config
 	cfg.Version = 1
 	if len(envelope.Agent) > 0 && string(envelope.Agent) != "null" {
 		a := defaultAgent()
-		if err := decodeStrict(envelope.Agent, &a); err != nil { return Config{}, err }
+		if err := decodeStrict(envelope.Agent, &a); err != nil {
+			return Config{}, err
+		}
 		a.resolve(filepath.Dir(filename))
-		if err := a.Validate(); err != nil { return Config{}, err }
+		if err := a.Validate(); err != nil {
+			return Config{}, err
+		}
 		cfg.Agent = &a
 	}
 	if len(envelope.Receiver) > 0 && string(envelope.Receiver) != "null" {
 		r := defaultReceiver()
-		if err := decodeStrict(envelope.Receiver, &r); err != nil { return Config{}, err }
+		if err := decodeStrict(envelope.Receiver, &r); err != nil {
+			return Config{}, err
+		}
 		r.resolve(filepath.Dir(filename))
-		if err := r.Validate(); err != nil { return Config{}, err }
+		if err := r.Validate(); err != nil {
+			return Config{}, err
+		}
 		cfg.Receiver = &r
 	}
 	if cfg.Agent == nil && cfg.Receiver == nil {

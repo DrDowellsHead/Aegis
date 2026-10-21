@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"time"
-
 )
 
 // runMigrate is an operator command. Database secrets are supplied via an

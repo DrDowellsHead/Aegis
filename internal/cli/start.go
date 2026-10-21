@@ -19,7 +19,9 @@ func runStart(ctx context.Context, args []string, errOut io.Writer) int {
 	filename := flags.String("config", "", "versioned non-secret JSON configuration")
 	component := flags.String("component", "", "agent or receiver")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *filename == "" || (*component != "agent" && *component != "receiver") {
@@ -55,7 +57,9 @@ func runValidateConfig(args []string, out, errOut io.Writer) int {
 	flags.SetOutput(errOut)
 	filename := flags.String("config", "", "versioned non-secret JSON configuration")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *filename == "" {
@@ -68,11 +72,15 @@ func runValidateConfig(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	names := make([]string, 0, 2)
-	if cfg.Agent != nil { names = append(names, "agent") }
-	if cfg.Receiver != nil { names = append(names, "receiver") }
+	if cfg.Agent != nil {
+		names = append(names, "agent")
+	}
+	if cfg.Receiver != nil {
+		names = append(names, "receiver")
+	}
 	if err := json.NewEncoder(out).Encode(struct {
-		Version int `json:"version"`
-		Valid bool `json:"valid"`
+		Version    int      `json:"version"`
+		Valid      bool     `json:"valid"`
 		Components []string `json:"components"`
 	}{Version: cfg.Version, Valid: true, Components: names}); err != nil {
 		fmt.Fprintln(errOut, "write config report failed")

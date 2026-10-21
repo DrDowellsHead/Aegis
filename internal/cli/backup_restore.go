@@ -169,7 +169,10 @@ func runBackup(ctx context.Context, args []string, out, errOut io.Writer) int {
 		}
 	}
 	raw, err := secrets.Resolve("AEGIS_DATABASE_URL")
-	if err != nil { fmt.Fprintln(errOut, "invalid source secret:", err); return 2 }
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid source secret:", err)
+		return 2
+	}
 	conn, err := parsePGConnection(raw)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
@@ -319,14 +322,20 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	restoreURL, err := secrets.Resolve("AEGIS_RESTORE_DATABASE_URL")
-	if err != nil { fmt.Fprintln(errOut, "invalid restore secret:", err); return 2 }
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid restore secret:", err)
+		return 2
+	}
 	conn, err := parsePGConnection(restoreURL)
 	if err != nil {
 		fmt.Fprintln(errOut, "invalid restore target:", err)
 		return 2
 	}
 	source, err := secrets.Resolve("AEGIS_DATABASE_URL")
-	if err != nil { fmt.Fprintln(errOut, "invalid source secret:", err); return 2 }
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid source secret:", err)
+		return 2
+	}
 	if source != "" && source == restoreURL {
 		fmt.Fprintln(errOut, "source and restore target must be different databases")
 		return 2

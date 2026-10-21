@@ -19,15 +19,21 @@ func Resolve(name string) (string, error) {
 	if (directSet && fileSet) || (fileSet && path == "") {
 		return "", fmt.Errorf("%s and %s_FILE are mutually exclusive", name, name)
 	}
-	if !fileSet { return direct, nil }
+	if !fileSet {
+		return direct, nil
+	}
 	info, err := os.Lstat(path)
-	if err != nil { return "", fmt.Errorf("%s_FILE cannot be read", name) }
+	if err != nil {
+		return "", fmt.Errorf("%s_FILE cannot be read", name)
+	}
 	if !info.Mode().IsRegular() || info.Size() > maxSecretSize ||
 		runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
 		return "", fmt.Errorf("%s_FILE must be a private regular file (0600 on Unix)", name)
 	}
 	f, err := os.Open(path)
-	if err != nil { return "", fmt.Errorf("%s_FILE cannot be opened", name) }
+	if err != nil {
+		return "", fmt.Errorf("%s_FILE cannot be opened", name)
+	}
 	defer f.Close()
 	data, err := io.ReadAll(io.LimitReader(f, maxSecretSize+1))
 	if err != nil || len(data) > maxSecretSize {
