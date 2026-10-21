@@ -235,7 +235,7 @@ export default function App() {
         {dataError} {currentPage && 'Показаны последние успешно полученные данные.'}
         <button type="button" onClick={() => setRefresh(i => i + 1)}
           disabled={loading}>Повторить</button>
-      </div>
+      </div>}
       {loading && currentPage && <p className="refresh-hint" role="status">
         Обновляем список, предыдущие данные остаются видимыми…
       </p>}
