@@ -15,11 +15,13 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/identity"
+	"github.com/DrDowellsHead/Aegis/internal/storage"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type remoteAuth struct {
+	audit securityAuditStore
 	origin       string
 	accounts     map[string]Account
 	dummyHash    []byte
@@ -33,6 +35,8 @@ func NewRemote(reader Reader, usersFile, publicOrigin, staticDir string, logger 
 	if err != nil {
 		return nil, err
 	}
+	audit,ok:=reader.(securityAuditStore)
+	if !ok{return nil,fmt.Errorf("remote dashboard requires durable security audit storage")}
 	accounts, err := LoadAccounts(usersFile)
 	if err != nil {
 		return nil, err
@@ -55,7 +59,7 @@ func NewRemote(reader Reader, usersFile, publicOrigin, staticDir string, logger 
 		byName[account.Username] = account
 	}
 	h.remote = &remoteAuth{
-		origin: origin, accounts: byName, dummyHash: dummyHash,
+		origin: origin, accounts: byName, dummyHash: dummyHash,audit:audit,
 		attemptsIP:   make(map[string][]time.Time),
 		attemptsUser: make(map[string][]time.Time),
 	}
@@ -166,6 +170,11 @@ func (h *Handler) remoteLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.allowRemoteLogin(body.Username, r.RemoteAddr) {
+		actor:="unknown"
+		if _,known:=h.remote.accounts[body.Username];known{actor=body.Username}
+		if !h.securityEvent(r.Context(),storage.SecurityEventInput{Action:"login_throttled",Actor:actor}){
+			fail(w,http.StatusServiceUnavailable,"audit_unavailable");return
+		}
 		w.Header().Set("Retry-After", "60")
 		fail(w, http.StatusTooManyRequests, "rate_limited")
 		return
@@ -177,6 +186,11 @@ func (h *Handler) remoteLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	verified := bcrypt.CompareHashAndPassword(passwordHash, []byte(body.Token)) == nil
 	if !found || !verified {
+		actor:="unknown"
+		if found{actor=account.Username}
+		if !h.securityEvent(r.Context(),storage.SecurityEventInput{Action:"login_failed",Actor:actor}){
+			fail(w,http.StatusServiceUnavailable,"audit_unavailable");return
+		}
 		fail(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -203,6 +217,10 @@ func (h *Handler) remoteLogin(w http.ResponseWriter, r *http.Request) {
 		expires: now.Add(sessionLifetime), username: account.Username, role: account.Role,
 	}
 	h.mu.Unlock()
+	if !h.securityEvent(r.Context(),storage.SecurityEventInput{Action:"login_ok",Actor:account.Username,Role:string(account.Role)}){
+		h.mu.Lock();delete(h.sessions,key);h.mu.Unlock()
+		fail(w,http.StatusServiceUnavailable,"audit_unavailable");return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: hex.EncodeToString(raw), Path: "/",
 		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode,
@@ -241,6 +259,9 @@ func (h *Handler) remoteAdmin(w http.ResponseWriter, r *http.Request, revoke boo
 		return
 	}
 	if s.role != RoleAdmin {
+		if !h.securityEvent(r.Context(),storage.SecurityEventInput{Action:"admin_denied",Actor:s.username,Subject:"session_admin",Role:string(s.role)}){
+			fail(w,http.StatusServiceUnavailable,"audit_unavailable");return
+		}
 		fail(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -270,11 +291,16 @@ func (h *Handler) remoteAdmin(w http.ResponseWriter, r *http.Request, revoke boo
 	}
 	h.mu.Lock()
 	count := 0
-	for key, value := range h.sessions {
-		if value.username == body.Username {
-			delete(h.sessions, key)
-			count++
-		}
+	for _, value := range h.sessions {
+		if value.username == body.Username {count++}
+	}
+	if !h.securityEvent(r.Context(),storage.SecurityEventInput{
+		Action:"sessions_revoked",Actor:s.username,Subject:body.Username,Role:string(s.role),AffectedSessions:count,
+	}){
+		h.mu.Unlock();fail(w,http.StatusServiceUnavailable,"audit_unavailable");return
+	}
+	for key,value:=range h.sessions{
+		if value.username==body.Username{delete(h.sessions,key)}
 	}
 	h.mu.Unlock()
 	h.logger.Info("dashboard sessions revoked", "by", s.username, "username", body.Username, "count", count)
