@@ -105,6 +105,23 @@ func (p *Postgres) ConfigureNotificationRoutes(ctx context.Context, routes []Not
 	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(176341, 55)"); err != nil {
 		return err
 	}
+	// Compare only while holding the fleet configuration advisory lock.
+	// Repeated process startups with unchanged routes should not flood audit.
+	old,err:=tx.QueryContext(ctx,"SELECT channel,target FROM aegis_notification_routes WHERE enabled=TRUE ORDER BY channel")
+	if err!=nil{return err}
+	existing:=make(map[string]string)
+	for old.Next(){
+		var channel,target string
+		if err=old.Scan(&channel,&target);err!=nil{old.Close();return err}
+		existing[channel]=target
+	}
+	err=old.Err()
+	old.Close()
+	if err!=nil{return err}
+	changed:=len(existing)!=len(routes)
+	for _,route:=range routes{
+		if existing[route.Channel]!=route.Target {changed=true}
+	}
 	if _, err = tx.ExecContext(ctx, "UPDATE aegis_notification_routes SET enabled=FALSE"); err != nil {
 		return err
 	}
@@ -115,6 +132,12 @@ func (p *Postgres) ConfigureNotificationRoutes(ctx context.Context, routes []Not
 		if err != nil {
 			return err
 		}
+	}
+	if changed {
+		channels:=make([]string,0,len(routes))
+		for _,route:=range routes {channels=append(channels,route.Channel)}
+		if err=appendOperatorAction(ctx,tx,"notification-worker","routes_updated","","notification_routes",
+			"Обновлены каналы уведомлений",map[string]any{"channels":channels});err!=nil{return err}
 	}
 	return tx.Commit()
 }
