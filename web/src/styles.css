@@ -194,3 +194,57 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .detail-charts { grid-template-columns:1fr; }
   .chart-panel:first-child { grid-column:auto; }
 }
+
+/* Phase 4.4: UTC range picker, comparison, accessible point inspection. */
+.detail-toolbar .compare-toggle {
+  display: inline-flex; gap: 9px; align-items:center;
+  border: 1px solid #3a536c; padding: 9px 11px; border-radius: 8px;
+  color:#d4e3f0; cursor:pointer; font-size: 12px;
+}
+.compare-toggle input { accent-color:#56baf0; width:16px; height:16px; }
+.custom-time-form {
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:15px;
+  padding:18px 20px; background:#112138; border:1px solid #344c65;
+  border-radius:12px; margin-bottom:15px;
+}
+.custom-time-form > div { display:grid; gap:6px; }
+.custom-time-form label { font-size:12px; color:#cad9e7; }
+.custom-time-form input {
+  background:#0c182a; padding:10px; border:1px solid #425d77;
+  color:#f0f6ff; color-scheme:dark; min-height:41px;
+}
+.custom-time-form .form-error { width:100%; color:#ffb3b6; margin:0; }
+.custom-time-form button { min-height:41px; }
+.time-explanation {
+  margin:4px 0 22px; padding:14px 18px; background:#13243a;
+  border-left:3px solid #5cb4df; border-radius:0 10px 10px 0;
+  overflow-wrap:anywhere;
+}
+.time-explanation p { font-size:12px; margin:0; }
+.time-explanation p + p { margin-top:8px; }
+.chart-comparison {
+  margin:0; padding:11px 20px; border-top:1px solid #2a4059;
+  font-size:11px; line-height:1.6; color:#c1d1e2;
+}
+.chart-comparison strong { color:#eff8ff; }
+.chart-inspection {
+  border-top:1px solid #2a4059; padding:13px 20px 19px;
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:12px;
+}
+.chart-inspection select {
+  background:#182c43; border:1px solid #415c76; color:#eaf2fa;
+  padding:7px 9px; max-width:100%; min-width:180px;
+}
+.chart-tooltip {
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:9px 15px;
+  width:100%; background:#1d3249; border:1px solid #41617d;
+  border-radius:9px; padding:12px 15px; color:#e5f4ff;
+}
+.chart-tooltip span { display:inline-block; }
+.trend-svg { touch-action:pan-y; }
+@media(max-width:600px) {
+  .custom-time-form > div, .custom-time-form input, .custom-time-form button { width:100%; }
+  .time-explanation { padding:12px; }
+  .chart-inspection { padding:12px; }
+  .chart-inspection select { width:100%; }
+}

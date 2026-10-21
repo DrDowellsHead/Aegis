@@ -1,0 +1,40 @@
+name: Temporary time-range validation
+on:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/temporary-time.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Update dependency lock
+        working-directory: web
+        run: npm install --no-audit --no-fund
+      - name: UTC and chart unit tests
+        working-directory: web
+        run: npm test
+      - name: Typecheck and build
+        working-directory: web
+        run: npm run build
+      - name: Scan browser bundle for privileged credentials
+        run: |
+          if grep -R -q -E 'postgres://|AEGIS_HISTORY_TOKEN|AEGIS_DATABASE_URL|AEGIS_DASHBOARD_TOKEN' web/dist/; then
+            echo "Server-side credential marker found in client bundle"
+            exit 1
+          fi
+      - name: Export lockfile for reproducible CI
+        if: success()
+        run: |
+          echo BEGIN_AEGIS44:web/package-lock.json
+          base64 -w0 web/package-lock.json
+          echo
+          echo END_AEGIS44:web/package-lock.json

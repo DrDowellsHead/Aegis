@@ -1,23 +1,8 @@
 import type { MeasurementPage, Measurement, Series, SeriesPoint } from './types'
 import { ApiError } from './client'
-
-export type Period = '1h' | '24h' | '7d'
-export type Window = { from: string; to: string; step: '1m' | '5m' | '1h'; period: Period }
-
-export function makeWindow(period: Period): Window {
-  const now = Date.now()
-  const specs = {
-    '1h': { duration: 3600000, step: '1m' },
-    '24h': { duration: 86400000, step: '5m' },
-    '7d': { duration: 7 * 86400000, step: '1h' }
-  } as const
-  return {
-    period,
-    from: new Date(now - specs[period].duration).toISOString(),
-    to: new Date(now).toISOString(),
-    step: specs[period].step
-  }
-}
+import type { Window } from './time'
+export { seriesSegments, makeWindow } from './time'
+export type { Period, Window } from './time'
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Invalid JSON object')
@@ -163,30 +148,3 @@ export async function fetchHistory(id: string, window: Window, cursor: string, s
   return page
 }
 
-// Sparse readings stay sparse: a missing metric and an absent time bucket
-// must NEVER become 0% or be bridged by a continuous chart segment.
-export function seriesSegments(points: SeriesPoint[], metric: keyof Pick<SeriesPoint,
-  'cpu_avg' | 'cpu_min' | 'cpu_max' | 'memory_avg' | 'disk_avg'>,
-  stepMS: number): SeriesPoint[][] {
-  const segments: SeriesPoint[][] = []
-  let current: SeriesPoint[] = []
-  let previous = Number.NaN
-  for (const point of points) {
-    const at = Date.parse(point.at)
-    const val = point[metric]
-    if (val === null || !Number.isFinite(at)) {
-      if (current.length) segments.push(current)
-      current = []
-      previous = Number.NaN
-      continue
-    }
-    if (current.length && at - previous > stepMS * 1.5) {
-      segments.push(current)
-      current = []
-    }
-    current.push(point)
-    previous = at
-  }
-  if (current.length) segments.push(current)
-  return segments
-}
