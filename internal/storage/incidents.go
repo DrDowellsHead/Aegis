@@ -299,10 +299,14 @@ func (p *Postgres) EvaluateAgentLivenessAs(ctx context.Context, agentID string, 
 			return "", err
 		}
 	}
-	if err = appendOperatorAction(ctx, tx, actor, "connectivity_evaluated", agentID, agentID,
-		"Ручная проверка доступности агента",
-		map[string]any{"status": state, "offline_after_seconds": int(offlineAfter / time.Second)}); err != nil {
-		return "", err
+	// Skip per-agent operator audit for the recurring scheduler, while
+	// keeping incident opened/escalated/resolved transition history.
+	if actor != "scheduler" {
+		if err = appendOperatorAction(ctx, tx, actor, "connectivity_evaluated", agentID, agentID,
+			"Ручная проверка доступности агента",
+			map[string]any{"status": state, "offline_after_seconds": int(offlineAfter / time.Second)}); err != nil {
+			return "", err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return "", fmt.Errorf("commit liveness evaluation: %w", err)
