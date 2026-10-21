@@ -181,7 +181,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.remoteAdmin(w, r, true)
 		return
 	case "/api/web/notifications/stats":
-		h.notificationSummary(w,r)
+		h.notificationSummary(w, r)
 		return
 	case "/api/web/incidents", "/api/web/incidents/events", "/api/web/incidents/settings",
 		"/api/web/incidents/evaluate", "/api/web/incidents/acknowledge",
