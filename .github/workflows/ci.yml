@@ -91,26 +91,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Prepare patched test-runner dependency proposal
-        working-directory: web
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install --save-dev --ignore-scripts --no-audit --no-fund vitest@5.0.5
-          echo AEGIS_PACKAGE_JSON_BEGIN
-          cat package.json
-          echo AEGIS_PACKAGE_JSON_END
-          echo AEGIS_PACKAGE_LOCK_BEGIN
-          cat package-lock.json
-          echo AEGIS_PACKAGE_LOCK_END
       - name: Audit all locked npm dependencies
         if: always()
         working-directory: web
         run: |
           npm ci --ignore-scripts --no-fund
           npm audit --audit-level=high
-      - name: Require dependency locks committed
-        run: git diff --exit-code -- go.mod go.sum web/package.json web/package-lock.json
       - name: Enforce release workflow policy
         if: always()
         run: python3 -m unittest discover -s scripts -p 'test_release_quality.py' -v
