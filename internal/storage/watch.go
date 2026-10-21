@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"time"
 )
@@ -73,7 +74,7 @@ func (l *WatchLease) Close() error {
 	if err != nil {
 		// If the state of the session is unknown, close the physical
 		// connection instead of returning a lock-holding pooled session.
-		_ = conn.Raw(func(driverConn any) error { return fmt.Errorf("discard watch session") })
+		_ = conn.Raw(func(_ driver.Conn) error { return driver.ErrBadConn })
 	}
 	closeErr := conn.Close()
 	if err != nil {
