@@ -146,6 +146,96 @@ func (x *SendResponse) GetAlreadyStored() bool {
 	return false
 }
 
+// Only server receipt time is trusted for liveness. No agent clock or payload.
+type HeartbeatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatRequest) Reset() {
+	*x = HeartbeatRequest{}
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatRequest) ProtoMessage() {}
+
+func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *HeartbeatRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+type HeartbeatResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True only after the liveness UPDATE commits in PostgreSQL.
+	Durable       bool `protobuf:"varint,1,opt,name=durable,proto3" json:"durable,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatResponse) Reset() {
+	*x = HeartbeatResponse{}
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatResponse) ProtoMessage() {}
+
+func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
+func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
+	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *HeartbeatResponse) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
 type Snapshot struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
@@ -166,7 +256,7 @@ type Snapshot struct {
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[2]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -178,7 +268,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[2]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -191,7 +281,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{2}
+	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Snapshot) GetSchemaVersion() uint32 {
@@ -280,7 +370,7 @@ type CPU struct {
 
 func (x *CPU) Reset() {
 	*x = CPU{}
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[3]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -292,7 +382,7 @@ func (x *CPU) String() string {
 func (*CPU) ProtoMessage() {}
 
 func (x *CPU) ProtoReflect() protoreflect.Message {
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[3]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -305,7 +395,7 @@ func (x *CPU) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CPU.ProtoReflect.Descriptor instead.
 func (*CPU) Descriptor() ([]byte, []int) {
-	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{3}
+	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CPU) GetUsedPercent() float64 {
@@ -327,7 +417,7 @@ type Memory struct {
 
 func (x *Memory) Reset() {
 	*x = Memory{}
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[4]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +429,7 @@ func (x *Memory) String() string {
 func (*Memory) ProtoMessage() {}
 
 func (x *Memory) ProtoReflect() protoreflect.Message {
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[4]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +442,7 @@ func (x *Memory) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Memory.ProtoReflect.Descriptor instead.
 func (*Memory) Descriptor() ([]byte, []int) {
-	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{4}
+	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Memory) GetTotalBytes() uint64 {
@@ -396,7 +486,7 @@ type Disk struct {
 
 func (x *Disk) Reset() {
 	*x = Disk{}
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[5]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -408,7 +498,7 @@ func (x *Disk) String() string {
 func (*Disk) ProtoMessage() {}
 
 func (x *Disk) ProtoReflect() protoreflect.Message {
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[5]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -421,7 +511,7 @@ func (x *Disk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Disk.ProtoReflect.Descriptor instead.
 func (*Disk) Descriptor() ([]byte, []int) {
-	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{5}
+	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Disk) GetPath() string {
@@ -470,7 +560,7 @@ type NetworkInterface struct {
 
 func (x *NetworkInterface) Reset() {
 	*x = NetworkInterface{}
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[6]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -482,7 +572,7 @@ func (x *NetworkInterface) String() string {
 func (*NetworkInterface) ProtoMessage() {}
 
 func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[6]
+	mi := &file_aegis_telemetry_v1_telemetry_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -495,7 +585,7 @@ func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkInterface.ProtoReflect.Descriptor instead.
 func (*NetworkInterface) Descriptor() ([]byte, []int) {
-	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{6}
+	return file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *NetworkInterface) GetName() string {
@@ -531,7 +621,11 @@ const file_aegis_telemetry_v1_telemetry_proto_rawDesc = "" +
 	"\fSendResponse\x12\x1a\n" +
 	"\breceived\x18\x01 \x01(\bR\breceived\x12\x18\n" +
 	"\adurable\x18\x02 \x01(\bR\adurable\x12%\n" +
-	"\x0ealready_stored\x18\x03 \x01(\bR\ralreadyStored\"\xa8\x04\n" +
+	"\x0ealready_stored\x18\x03 \x01(\bR\ralreadyStored\"-\n" +
+	"\x10HeartbeatRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\"-\n" +
+	"\x11HeartbeatResponse\x12\x18\n" +
+	"\adurable\x18\x01 \x01(\bR\adurable\"\xa8\x04\n" +
 	"\bSnapshot\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x129\n" +
 	"\n" +
@@ -572,9 +666,10 @@ const file_aegis_telemetry_v1_telemetry_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
 	"bytes_sent\x18\x02 \x01(\x04R\tbytesSent\x12%\n" +
-	"\x0ebytes_received\x18\x03 \x01(\x04R\rbytesReceived2]\n" +
+	"\x0ebytes_received\x18\x03 \x01(\x04R\rbytesReceived2\xb7\x01\n" +
 	"\x10TelemetryService\x12I\n" +
-	"\x04Send\x12\x1f.aegis.telemetry.v1.SendRequest\x1a .aegis.telemetry.v1.SendResponseBBZ@github.com/DrDowellsHead/Aegis/internal/telemetry/v1;telemetryv1b\x06proto3"
+	"\x04Send\x12\x1f.aegis.telemetry.v1.SendRequest\x1a .aegis.telemetry.v1.SendResponse\x12X\n" +
+	"\tHeartbeat\x12$.aegis.telemetry.v1.HeartbeatRequest\x1a%.aegis.telemetry.v1.HeartbeatResponseBBZ@github.com/DrDowellsHead/Aegis/internal/telemetry/v1;telemetryv1b\x06proto3"
 
 var (
 	file_aegis_telemetry_v1_telemetry_proto_rawDescOnce sync.Once
@@ -588,33 +683,37 @@ func file_aegis_telemetry_v1_telemetry_proto_rawDescGZIP() []byte {
 	return file_aegis_telemetry_v1_telemetry_proto_rawDescData
 }
 
-var file_aegis_telemetry_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_aegis_telemetry_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_aegis_telemetry_v1_telemetry_proto_goTypes = []any{
 	(*SendRequest)(nil),           // 0: aegis.telemetry.v1.SendRequest
 	(*SendResponse)(nil),          // 1: aegis.telemetry.v1.SendResponse
-	(*Snapshot)(nil),              // 2: aegis.telemetry.v1.Snapshot
-	(*CPU)(nil),                   // 3: aegis.telemetry.v1.CPU
-	(*Memory)(nil),                // 4: aegis.telemetry.v1.Memory
-	(*Disk)(nil),                  // 5: aegis.telemetry.v1.Disk
-	(*NetworkInterface)(nil),      // 6: aegis.telemetry.v1.NetworkInterface
-	nil,                           // 7: aegis.telemetry.v1.Snapshot.ErrorsEntry
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*HeartbeatRequest)(nil),      // 2: aegis.telemetry.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),     // 3: aegis.telemetry.v1.HeartbeatResponse
+	(*Snapshot)(nil),              // 4: aegis.telemetry.v1.Snapshot
+	(*CPU)(nil),                   // 5: aegis.telemetry.v1.CPU
+	(*Memory)(nil),                // 6: aegis.telemetry.v1.Memory
+	(*Disk)(nil),                  // 7: aegis.telemetry.v1.Disk
+	(*NetworkInterface)(nil),      // 8: aegis.telemetry.v1.NetworkInterface
+	nil,                           // 9: aegis.telemetry.v1.Snapshot.ErrorsEntry
+	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
 }
 var file_aegis_telemetry_v1_telemetry_proto_depIdxs = []int32{
-	2, // 0: aegis.telemetry.v1.SendRequest.snapshot:type_name -> aegis.telemetry.v1.Snapshot
-	8, // 1: aegis.telemetry.v1.Snapshot.started_at:type_name -> google.protobuf.Timestamp
-	3, // 2: aegis.telemetry.v1.Snapshot.cpu:type_name -> aegis.telemetry.v1.CPU
-	4, // 3: aegis.telemetry.v1.Snapshot.memory:type_name -> aegis.telemetry.v1.Memory
-	5, // 4: aegis.telemetry.v1.Snapshot.disk:type_name -> aegis.telemetry.v1.Disk
-	6, // 5: aegis.telemetry.v1.Snapshot.network:type_name -> aegis.telemetry.v1.NetworkInterface
-	7, // 6: aegis.telemetry.v1.Snapshot.errors:type_name -> aegis.telemetry.v1.Snapshot.ErrorsEntry
-	0, // 7: aegis.telemetry.v1.TelemetryService.Send:input_type -> aegis.telemetry.v1.SendRequest
-	1, // 8: aegis.telemetry.v1.TelemetryService.Send:output_type -> aegis.telemetry.v1.SendResponse
-	8, // [8:9] is the sub-list for method output_type
-	7, // [7:8] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	4,  // 0: aegis.telemetry.v1.SendRequest.snapshot:type_name -> aegis.telemetry.v1.Snapshot
+	10, // 1: aegis.telemetry.v1.Snapshot.started_at:type_name -> google.protobuf.Timestamp
+	5,  // 2: aegis.telemetry.v1.Snapshot.cpu:type_name -> aegis.telemetry.v1.CPU
+	6,  // 3: aegis.telemetry.v1.Snapshot.memory:type_name -> aegis.telemetry.v1.Memory
+	7,  // 4: aegis.telemetry.v1.Snapshot.disk:type_name -> aegis.telemetry.v1.Disk
+	8,  // 5: aegis.telemetry.v1.Snapshot.network:type_name -> aegis.telemetry.v1.NetworkInterface
+	9,  // 6: aegis.telemetry.v1.Snapshot.errors:type_name -> aegis.telemetry.v1.Snapshot.ErrorsEntry
+	0,  // 7: aegis.telemetry.v1.TelemetryService.Send:input_type -> aegis.telemetry.v1.SendRequest
+	2,  // 8: aegis.telemetry.v1.TelemetryService.Heartbeat:input_type -> aegis.telemetry.v1.HeartbeatRequest
+	1,  // 9: aegis.telemetry.v1.TelemetryService.Send:output_type -> aegis.telemetry.v1.SendResponse
+	3,  // 10: aegis.telemetry.v1.TelemetryService.Heartbeat:output_type -> aegis.telemetry.v1.HeartbeatResponse
+	9,  // [9:11] is the sub-list for method output_type
+	7,  // [7:9] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_aegis_telemetry_v1_telemetry_proto_init() }
@@ -628,7 +727,7 @@ func file_aegis_telemetry_v1_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aegis_telemetry_v1_telemetry_proto_rawDesc), len(file_aegis_telemetry_v1_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

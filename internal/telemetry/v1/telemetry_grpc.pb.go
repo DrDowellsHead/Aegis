@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TelemetryService_Send_FullMethodName = "/aegis.telemetry.v1.TelemetryService/Send"
+	TelemetryService_Send_FullMethodName      = "/aegis.telemetry.v1.TelemetryService/Send"
+	TelemetryService_Heartbeat_FullMethodName = "/aegis.telemetry.v1.TelemetryService/Heartbeat"
 )
 
 // TelemetryServiceClient is the client API for TelemetryService service.
@@ -30,6 +31,8 @@ const (
 // A durable acknowledgement is sent only after the database commit.
 type TelemetryServiceClient interface {
 	Send(ctx context.Context, in *SendRequest, opts ...grpc.CallOption) (*SendResponse, error)
+	// Presence signal independent of measurement collection and spool replay.
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 }
 
 type telemetryServiceClient struct {
@@ -50,6 +53,16 @@ func (c *telemetryServiceClient) Send(ctx context.Context, in *SendRequest, opts
 	return out, nil
 }
 
+func (c *telemetryServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, TelemetryService_Heartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TelemetryServiceServer is the server API for TelemetryService service.
 // All implementations must embed UnimplementedTelemetryServiceServer
 // for forward compatibility.
@@ -58,6 +71,8 @@ func (c *telemetryServiceClient) Send(ctx context.Context, in *SendRequest, opts
 // A durable acknowledgement is sent only after the database commit.
 type TelemetryServiceServer interface {
 	Send(context.Context, *SendRequest) (*SendResponse, error)
+	// Presence signal independent of measurement collection and spool replay.
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	mustEmbedUnimplementedTelemetryServiceServer()
 }
 
@@ -70,6 +85,9 @@ type UnimplementedTelemetryServiceServer struct{}
 
 func (UnimplementedTelemetryServiceServer) Send(context.Context, *SendRequest) (*SendResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
+}
+func (UnimplementedTelemetryServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
 }
 func (UnimplementedTelemetryServiceServer) mustEmbedUnimplementedTelemetryServiceServer() {}
 func (UnimplementedTelemetryServiceServer) testEmbeddedByValue()                          {}
@@ -110,6 +128,24 @@ func _TelemetryService_Send_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TelemetryService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelemetryServiceServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelemetryService_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelemetryServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TelemetryService_ServiceDesc is the grpc.ServiceDesc for TelemetryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -120,6 +156,10 @@ var TelemetryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Send",
 			Handler:    _TelemetryService_Send_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _TelemetryService_Heartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
