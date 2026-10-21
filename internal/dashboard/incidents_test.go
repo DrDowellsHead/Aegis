@@ -108,6 +108,7 @@ func TestIncidentAPIRejectsMalformedAndRedactsDBErrors(t *testing.T) {
 		"/api/web/incidents?state=invalid",
 		"/api/web/incidents?state=all&state=active",
 		"/api/web/incidents?agent_id=invalid",
+		"/api/web/incidents?cursor=not-base64!",
 		"/api/web/incidents/events?id=invalid",
 	} {
 		if w := request(h, "GET", path, "", "", c); w.Code != 400 {
