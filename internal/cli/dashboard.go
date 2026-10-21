@@ -27,6 +27,7 @@ func runDashboard(ctx context.Context, args []string, errOut io.Writer) int {
 	usersFile := flags.String("users-file", "", "private account registry in JSON format")
 	tlsCert := flags.String("tls-cert", "", "HTTPS certificate PEM file")
 	tlsKey := flags.String("tls-key", "", "HTTPS private key PEM file")
+	tlsCA := flags.String("tls-ca-cert", "", "optional explicit CA bundle to validate HTTPS chain")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -38,7 +39,7 @@ func runDashboard(ctx context.Context, args []string, errOut io.Writer) int {
 		return 2
 	}
 	if !*remote {
-		if *usersFile != "" || *publicOrigin != "" || *tlsCert != "" || *tlsKey != "" {
+		if *usersFile != "" || *publicOrigin != "" || *tlsCert != "" || *tlsKey != "" || *tlsCA != "" {
 			fmt.Fprintln(errOut, "TLS and account flags require --remote")
 			return 2
 		}
@@ -56,7 +57,7 @@ func runDashboard(ctx context.Context, args []string, errOut io.Writer) int {
 			fmt.Fprintln(errOut, "--remote requires --users-file, --public-origin, --tls-cert and --tls-key")
 			return 2
 		}
-		if err := dashboard.CheckServerCertificate(*tlsCert, *tlsKey, *publicOrigin); err != nil {
+		if err := dashboard.CheckServerCertificateWithCA(*tlsCert, *tlsKey, *tlsCA, *publicOrigin); err != nil {
 			fmt.Fprintln(errOut, "invalid dashboard HTTPS setup:", err)
 			return 2
 		}
