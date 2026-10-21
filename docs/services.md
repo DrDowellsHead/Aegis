@@ -105,7 +105,7 @@ Stop-Service AegisAgent
 
 The script refuses to overwrite an existing service, validates the
 config, registers an automatic-start service and sets delayed recovery
-actions (5, 15 and 60 seconds). A service-account password is passed
+actions (5, 15 and 60 seconds), including nonzero service exit codes. A service-account password is passed
 to Windows securely through `PSCredential`, not embedded in
 `binPath`. To unregister without deleting data:
 

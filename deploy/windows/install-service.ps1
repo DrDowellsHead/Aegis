@@ -48,6 +48,10 @@ if (Get-Service -Name $name -ErrorAction SilentlyContinue) {
 if ($LASTEXITCODE -ne 0) {
     throw 'Invalid Aegis config; nothing was installed.'
 }
+$profile = Get-Content -LiteralPath $cfg -Raw | ConvertFrom-Json -ErrorAction Stop
+if ($null -eq $profile.PSObject.Properties[$Component] -or $null -eq $profile.$Component) {
+    throw "Configuration does not contain the selected $Component profile."
+}
 
 $command = '"' + $exe + '" start --config "' + $cfg + '" --component ' + $Component
 New-Service -Name $name -BinaryPathName $command -StartupType Automatic -Credential $Credential -Description "Aegis telemetry $Component"
@@ -61,5 +65,10 @@ if ($Component -eq 'receiver') {
 if ($LASTEXITCODE -ne 0) {
     Write-Warning 'Service registered, but recovery actions could not be configured. Fix the service manually.'
     throw 'SCM recovery configuration failed.'
+}
+# Restart also when the service reports STOPPED with a nonzero exit code.
+& sc.exe failureflag $name 1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw 'SCM failed to enable restart after service-reported failures.'
 }
 Write-Host "$name installed, but not started. Verify service-account access to config, secrets and spool, then Start-Service $name."

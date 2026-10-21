@@ -60,6 +60,8 @@ class ServiceTemplateTests(unittest.TestCase):
         self.assertIn("-Credential $Credential", install)
         self.assertIn("Get-Service", install)
         self.assertIn("sc.exe failure", install)
+        self.assertIn("sc.exe failureflag", install)
+        self.assertIn("profile.PSObject.Properties", install)
         self.assertIn("validate-config", install)
         self.assertIn("AEGIS_DATABASE_URL_FILE=", install)
         self.assertIn("-DatabaseURLFile", install)
