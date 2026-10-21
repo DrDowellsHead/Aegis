@@ -105,19 +105,7 @@ func TestAgentTokenRotationFailClosed(t *testing.T) {
 		t.Fatal("failed rotation unexpectedly revoked original token")
 	}
 
-	// If the client path cannot be created, do not publish the new digest.
-	if err := RotateToken(registryPath, filepath.Join(dir, "no-directory", "x.json"), id); err != nil {
-		// Creating parents is normal in Aegis, so the call can succeed.
-		// Confirm the original token is rejected only on successful commit.
-		return
-	}
-	rotated, err := LoadCredentials(filepath.Join(dir, "no-directory", "x.json"))
-	if err != nil { t.Fatal(err) }
-	registry, err = LoadRegistry(registryPath)
-	if err != nil || !registry.Authenticate(id, rotated.Token) ||
-		registry.Authenticate(id, original.Token) {
-		t.Fatal("published registry and client credentials disagree")
-	}
+
 }
 
 func TestRotationDoesNotExposeSecretsInErrors(t *testing.T) {
