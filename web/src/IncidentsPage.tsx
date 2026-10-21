@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from './api/client'
 import {
   loadIncidents, changeIncident, evaluateLiveness, loadIncidentEvents,
+  getIncidentSettings, updateIncidentSettings,
   type Incident, type IncidentEvent, type IncidentFilter
 } from './api/incidents'
 
 const uuid=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 const states = { open: 'Открыт', acknowledged: 'Подтверждён', resolved: 'Разрешён' }
-const actions = { opened: 'Открытие', acknowledged: 'Подтверждение', resolved: 'Разрешение' }
+const actions = { opened: 'Открытие', acknowledged: 'Подтверждение', resolved: 'Разрешение',
+  escalated: 'Эскалация до critical' }
 function dateLabel(s: string | null): string {
   if (!s) return '—'
   const d=new Date(s)
@@ -34,6 +36,9 @@ export default function IncidentsPage({ canManage, onExpired }: {
   const [timeline,setTimeline]=useState('')
   const [events,setEvents]=useState<IncidentEvent[]>([])
   const [eventsBusy,setEventsBusy]=useState(false)
+  const [cooldown,setCooldown]=useState('300')
+  const [escalation,setEscalation]=useState('900')
+  const [settingsReady,setSettingsReady]=useState(false)
 
   const fail=useCallback((cause: unknown)=>{
     if (cause instanceof ApiError && cause.status===401) {onExpired();return}
@@ -44,6 +49,17 @@ export default function IncidentsPage({ canManage, onExpired }: {
       setError('Инцидент или зарегистрированный агент не найден.')
     } else setError('Не удалось выполнить запрос. Проверьте соединение с Go и PostgreSQL.')
   },[onExpired])
+
+  useEffect(()=>{
+    let cancelled=false
+    getIncidentSettings().then(value=>{
+      if(cancelled)return
+      setCooldown(String(value.cooldown_seconds))
+      setEscalation(String(value.escalate_after_seconds))
+      setSettingsReady(true)
+    }).catch(cause=>{if(!cancelled)fail(cause)})
+    return ()=>{cancelled=true}
+  },[fail])
 
   useEffect(()=>{
     const controller=new AbortController()
@@ -133,6 +149,34 @@ export default function IncidentsPage({ canManage, onExpired }: {
         <button type="submit" disabled={busy}>Проверить связь</button>
       </form>
     </section>}
+    <section className="panel" aria-label="Политика инцидентов">
+      <div className="panel-heading"><h2>Подавление повторов и эскалация</h2></div>
+      <p className="muted">После разрешения проблема не откроет новый инцидент в течение cooldown. Неподтверждённая проблема при следующей проверке повышается до critical после указанного интервала.</p>
+      {settingsReady && <form className="filter-bar" onSubmit={e=>{
+        e.preventDefault()
+        const c=Number(cooldown),a=Number(escalation)
+        if(!Number.isInteger(c)||c<0||c>86400 || !Number.isInteger(a)||a<60||a>604800){
+          setError('Cooldown: 0–86400 сек.; эскалация: 60–604800 сек.')
+          return
+        }
+        if(!canManage)return
+        void perform(async ()=>{
+          const result=await updateIncidentSettings(c,a)
+          setCooldown(String(result.cooldown_seconds))
+          setEscalation(String(result.escalate_after_seconds))
+        },'Политика сохранена в PostgreSQL.')
+      }}>
+        <label htmlFor="incident-cooldown">Cooldown (сек., 0 — отключён)</label>
+        <input id="incident-cooldown" type="number" min={0} max={86400} step={1}
+          value={cooldown} disabled={!canManage || busy}
+          onChange={e=>setCooldown(e.target.value)}/>
+        <label htmlFor="incident-escalation">Эскалация после (сек.)</label>
+        <input id="incident-escalation" type="number" min={60} max={604800} step={1}
+          value={escalation} disabled={!canManage || busy}
+          onChange={e=>setEscalation(e.target.value)}/>
+        {canManage && <button type="submit" disabled={busy}>Сохранить политику</button>}
+      </form>}
+    </section>
     <section className="panel" aria-label="Список инцидентов">
       <div className="panel-heading"><h2>Список инцидентов</h2>
         <span className="muted small">По времени возникновения, новые первыми</span>
@@ -149,6 +193,9 @@ export default function IncidentsPage({ canManage, onExpired }: {
           <td>{dateLabel(item.opened_at)}</td>
           <td><span className={item.state==='resolved'?'status-pill status-online':
             item.state==='open'?'status-pill status-offline':'status-pill status-unknown'}>{states[item.state]}</span>
+            <div className="muted small">Приоритет: {item.severity==='critical'?'CRITICAL':'warning'}</div>
+            {item.escalated_at && <div className="muted small">Эскалация: {dateLabel(item.escalated_at)}</div>}
+            {item.suppressed_checks>0 && <div className="muted small">Подавлено проверок: {item.suppressed_checks}</div>}
             {item.acknowledged_by && <div className="muted small">Принял: {item.acknowledged_by}</div>}
           </td>
           <td>
