@@ -39,14 +39,24 @@ func (p *Postgres) GetIncidentSettings(ctx context.Context) (IncidentSettings, e
 	return readIncidentSettings(p.db.QueryRowContext(ctx, `SELECT cooldown_seconds,
 		escalate_after_seconds,updated_at FROM aegis_incident_settings WHERE id=1`))
 }
-func (p *Postgres) UpdateIncidentSettings(ctx context.Context, v IncidentSettings) (IncidentSettings, error) {
+func (p *Postgres) UpdateIncidentSettings(ctx context.Context,v IncidentSettings)(IncidentSettings,error) {
+	return p.UpdateIncidentSettingsAs(ctx,v,"system")
+}
+func (p *Postgres) UpdateIncidentSettingsAs(ctx context.Context,v IncidentSettings,actor string)(IncidentSettings,error) {
 	if err := validateIncidentSettings(v); err != nil {
 		return IncidentSettings{}, err
 	}
 	if p == nil || p.db == nil {
 		return IncidentSettings{}, fmt.Errorf("database unavailable")
 	}
-	record, err := readIncidentSettings(p.db.QueryRowContext(ctx, `
+	tx,err:=p.db.BeginTx(ctx,nil)
+	if err!=nil{return IncidentSettings{},err}
+	defer tx.Rollback()
+	var before IncidentSettings
+	before,err=readIncidentSettings(tx.QueryRowContext(ctx,`SELECT cooldown_seconds,
+		escalate_after_seconds,updated_at FROM aegis_incident_settings WHERE id=1 FOR UPDATE`))
+	if err!=nil{return IncidentSettings{},err}
+	record, err := readIncidentSettings(tx.QueryRowContext(ctx, `
 		UPDATE aegis_incident_settings
 		SET cooldown_seconds=$1,escalate_after_seconds=$2,updated_at=clock_timestamp()
 		WHERE id=1 RETURNING cooldown_seconds,escalate_after_seconds,updated_at`,
@@ -54,5 +64,12 @@ func (p *Postgres) UpdateIncidentSettings(ctx context.Context, v IncidentSetting
 	if err != nil {
 		return IncidentSettings{}, fmt.Errorf("update incident settings: %w", err)
 	}
-	return record, nil
+	if before.CooldownSeconds!=record.CooldownSeconds || before.EscalateAfterSeconds!=record.EscalateAfterSeconds {
+		if err=appendOperatorAction(ctx,tx,actor,"policy_updated","","incident_policy",
+			"Настройки инцидентов изменены",
+			map[string]any{"cooldown_before":before.CooldownSeconds,"cooldown_after":record.CooldownSeconds,
+				"escalation_before":before.EscalateAfterSeconds,"escalation_after":record.EscalateAfterSeconds});err!=nil{return IncidentSettings{},err}
+	}
+	if err=tx.Commit();err!=nil{return IncidentSettings{},err}
+	return record,nil
 }
