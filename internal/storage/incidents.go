@@ -103,9 +103,21 @@ func readIncident(s interface{ Scan(...any) error }) (Incident, error) {
 }
 
 func incidentEvent(ctx context.Context, tx *sql.Tx, id, action, actor, reason string, at time.Time) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO aegis_incident_events
-		(incident_id,action,actor,reason,occurred_at) VALUES($1,$2,$3,$4,$5)`,
-		id, action, actor, reason, at)
+	// Always persist the incident transition and notification outbox in the
+	// SAME transaction. Network I/O is exclusively performed by the worker.
+	var eventID int64
+	err := tx.QueryRowContext(ctx, `INSERT INTO aegis_incident_events
+		(incident_id,action,actor,reason,occurred_at) VALUES($1,$2,$3,$4,$5)
+		RETURNING id`, id, action, actor, reason, at).Scan(&eventID)
+	if err != nil {return err}
+	if action!="opened" && action!="escalated" && action!="resolved" {
+		return nil // acknowledgments remain audit-only; no outbound noise.
+	}
+	_,err=tx.ExecContext(ctx,`INSERT INTO aegis_notification_jobs
+		(event_id,channel,target)
+		SELECT $1,channel,target FROM aegis_notification_routes
+		WHERE enabled=TRUE
+		ON CONFLICT (event_id,channel) DO NOTHING`,eventID)
 	return err
 }
 
