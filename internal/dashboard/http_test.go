@@ -23,9 +23,9 @@ const examplePassword = "test-dashboard-password-0123456789-abcdef"
 const exampleAgent = "123e4567-e89b-42d3-a456-426614174000"
 
 type stub struct {
-	auditMu sync.Mutex
-	auditEvents []storage.SecurityEventInput
-	auditError error
+	auditMu       sync.Mutex
+	auditEvents   []storage.SecurityEventInput
+	auditError    error
 	queries       int
 	stats         int
 	last          storage.AgentQuery
@@ -38,24 +38,30 @@ type stub struct {
 	err           error
 }
 
-func(s *stub) RecordSecurityEvent(_ context.Context, event storage.SecurityEventInput) error {
+func (s *stub) RecordSecurityEvent(_ context.Context, event storage.SecurityEventInput) error {
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
-	if s.auditError!=nil{return s.auditError}
-	s.auditEvents=append(s.auditEvents,event)
+	if s.auditError != nil {
+		return s.auditError
+	}
+	s.auditEvents = append(s.auditEvents, event)
 	return nil
 }
-func(s *stub) ListSecurityEvents(_ context.Context,q storage.SecurityEventQuery)(storage.SecurityEventPage,error){
+func (s *stub) ListSecurityEvents(_ context.Context, q storage.SecurityEventQuery) (storage.SecurityEventPage, error) {
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
-	if s.auditError!=nil{return storage.SecurityEventPage{},s.auditError}
-	page:=storage.SecurityEventPage{Items:make([]storage.SecurityEvent,0)}
-	for _,v:=range s.auditEvents{
-		if q.Action!=""&&q.Action!=v.Action||q.Actor!=""&&q.Actor!=v.Actor{continue}
-		page.Items=append(page.Items,storage.SecurityEvent{Action:v.Action,Actor:v.Actor,
-			Subject:v.Subject,Role:v.Role,AffectedSessions:v.AffectedSessions})
+	if s.auditError != nil {
+		return storage.SecurityEventPage{}, s.auditError
 	}
-	return page,nil
+	page := storage.SecurityEventPage{Items: make([]storage.SecurityEvent, 0)}
+	for _, v := range s.auditEvents {
+		if q.Action != "" && q.Action != v.Action || q.Actor != "" && q.Actor != v.Actor {
+			continue
+		}
+		page.Items = append(page.Items, storage.SecurityEvent{Action: v.Action, Actor: v.Actor,
+			Subject: v.Subject, Role: v.Role, AffectedSessions: v.AffectedSessions})
+	}
+	return page, nil
 }
 func (s *stub) ListAgents(_ context.Context, q storage.AgentQuery) (storage.AgentResult, error) {
 	s.queries++
