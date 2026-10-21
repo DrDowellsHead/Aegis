@@ -109,6 +109,22 @@ jobs:
       - name: TypeScript and Vite production build
         working-directory: web
         run: npm run build
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Browser E2E with mocked gateway
+        working-directory: web
+        run: npm run e2e
+      - name: Save browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-traces
+          path: |
+            web/test-results
+            web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Prevent server credential references in client bundle
         shell: bash
         run: |
