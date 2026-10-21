@@ -548,14 +548,21 @@ npm run e2e
 командной строки. Для PowerShell:
 
 ```powershell
-# Из корня репозитория:
-$pass = Read-Host "Пароль администратора (минимум 16 символов)"
-$pass | go run ./cmd/aegis dashboard-user --file ./dashboard-users.json --username operator --role admin --password-stdin
-Remove-Variable pass
-
-$pass = Read-Host "Пароль наблюдателя"
-$pass | go run ./cmd/aegis dashboard-user --file ./dashboard-users.json --username observer --role viewer --password-stdin
-Remove-Variable pass
+# Из корня репозитория. Ввод пароля скрыт от окружающих.
+function Add-AegisUser {
+    param([string]$Name, [string]$Role)
+    $secure = Read-Host "Пароль для $Name (16–72 байта)" -AsSecureString
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+        $plain | go run ./cmd/aegis dashboard-user --file ./dashboard-users.json --username $Name --role $Role --password-stdin
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+        Remove-Variable plain, secure -ErrorAction SilentlyContinue
+    }
+}
+Add-AegisUser -Name operator -Role admin
+Add-AegisUser -Name observer -Role viewer
 ```
 
 Файл `dashboard-users.json` нельзя коммитить. На Linux и macOS выставьте
