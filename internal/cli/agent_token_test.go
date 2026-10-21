@@ -58,9 +58,7 @@ func TestAgentTokenRejectsIncompleteCommands(t *testing.T) {
 		{"agent-token", "revoke"},
 		{"agent-token", "rotate", "--agents-file", "a", "--agent-id", "bad", "--credentials", "b"},
 		{"agent-token", "revoke", "--agents-file", "a", "--agent-id", "bad", "--credentials", "b"},
-		{"agent-token", "revoke", "--help", "stray"},
 	} {
-		if len(args)>2 && args[2]=="--help" {continue}
 		var out, stderr bytes.Buffer
 		if got := Run(context.Background(), args, &out, &stderr, "test"); got != 2 {
 			t.Fatalf("%v: code=%d wanted 2: %s", args, got, stderr.String())
