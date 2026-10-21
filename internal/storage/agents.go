@@ -61,15 +61,15 @@ type AgentQuery struct {
 }
 
 type AgentInfo struct {
-	AgentID       string     `json:"agent_id"`
-	Status        string     `json:"status"`
-	RegisteredAt  time.Time  `json:"registered_at"`
-	LastContactAt *time.Time `json:"last_contact_at"`
-	LastSampleAt  *time.Time `json:"last_sample_at"`
+	AgentID         string     `json:"agent_id"`
+	Status          string     `json:"status"`
+	RegisteredAt    time.Time  `json:"registered_at"`
+	LastContactAt   *time.Time `json:"last_contact_at"`
+	LastSampleAt    *time.Time `json:"last_sample_at"`
 	LastHeartbeatAt *time.Time `json:"last_heartbeat_at"`
 	LastTelemetryAt *time.Time `json:"last_telemetry_at"`
-	OS            string     `json:"os,omitempty"`
-	Arch          string     `json:"arch,omitempty"`
+	OS              string     `json:"os,omitempty"`
+	Arch            string     `json:"arch,omitempty"`
 }
 
 type AgentResult struct {

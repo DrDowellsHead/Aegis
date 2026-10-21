@@ -126,7 +126,9 @@ func TestPostgresGRPCDurableACK(t *testing.T) {
 	badAgent := credentials
 	badAgent.Token = "0000000000000000000000000000000000000000000000000000000000000000"
 	badClient, err := NewClient(listener.Addr().String(), badAgent, ca)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer badClient.Close()
 	if err := badClient.Heartbeat(ctx); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("invalid TLS heartbeat credentials accepted: %v", err)
