@@ -3,13 +3,14 @@ import AgentDetail from './AgentDetail'
 import AdminSettings from './AdminSettings'
 import RulesPage from './RulesPage'
 import IncidentsPage from './IncidentsPage'
+import ActivityPage from './ActivityPage'
 import type { AgentInfo, AgentPage, AgentStatus } from './api/types'
 import {
   ApiError, checkSession, signIn, signOut, loadAgents, loadSummary,
   type AgentSummary, type DashboardSession
 } from './api/client'
 
-type Page = 'overview' | 'agents' | 'agent-detail' | 'rules' | 'incidents' | 'settings' | 'not-found'
+type Page = 'overview' | 'agents' | 'agent-detail' | 'rules' | 'incidents' | 'activity' | 'settings' | 'not-found'
 type AuthState = 'checking' | 'authenticated' | 'anonymous' | 'unavailable'
 
 const navigation = [
@@ -17,6 +18,7 @@ const navigation = [
   { path: '/agents', label: 'Агенты', symbol: '▦' },
   { path: '/rules', label: 'Правила', symbol: '◇' },
   { path: '/incidents', label: 'Инциденты', symbol: '⚑' },
+  { path: '/activity', label: 'Журнал', symbol: '≡' },
   { path: '/settings', label: 'Настройки', symbol: '⚙' }
 ]
 
@@ -26,6 +28,7 @@ function route(path: string): Page {
   if (/^\/agents\/[0-9a-fA-F-]{36}$/.test(path)) return 'agent-detail'
   if (path === '/rules') return 'rules'
   if (path === '/incidents') return 'incidents'
+  if (path === '/activity') return 'activity'
   if (path === '/settings') return 'settings'
   return 'not-found'
 }
@@ -247,7 +250,8 @@ export default function App() {
   const currentSummary = loadedKey === queryKey ? summary : null
   const listing = currentPage?.items ?? []
   const title = page === 'agents' ? 'Агенты' : page === 'agent-detail' ? 'Карточка агента' :
-    page === 'rules' ? 'Правила' : page === 'incidents' ? 'Инциденты' : page === 'settings' ? 'Настройки' : 'Обзор'
+    page === 'rules' ? 'Правила' : page === 'incidents' ? 'Инциденты' :
+    page === 'activity' ? 'Журнал' : page === 'settings' ? 'Настройки' : 'Обзор'
 
   function listPanel() {
     return <Panel title="Зарегистрированные агенты" note="Данные PostgreSQL · обновление каждые 30 секунд">
@@ -334,6 +338,7 @@ export default function App() {
           canManage={session.mode === 'local' || session.role === 'admin'} />}
         {page === 'incidents' && <IncidentsPage onExpired={onExpired}
           canManage={session.mode === 'local' || session.role === 'admin'} />}
+        {page === 'activity' && <ActivityPage onExpired={onExpired} />}
         {page === 'not-found' && <Panel title="Страница не найдена">
           <Empty title="Неизвестный адрес" text="Выберите раздел в навигации." />
         </Panel>}
