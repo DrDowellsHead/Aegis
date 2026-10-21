@@ -240,9 +240,6 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 	if p == nil || p.db == nil {
 		return nil, fmt.Errorf("database unavailable")
 	}
-	// PostgreSQL timestamptz has microsecond precision; keep API and persisted
-	// transition timestamps identical across the first and subsequent reads.
-	at := time.Now().UTC().Truncate(time.Microsecond)
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin rule evaluation: %w", err)
@@ -267,6 +264,14 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 	if err != nil {
 		return nil, fmt.Errorf("read evaluation rules: %w", err)
 	}
+	// Read the PostgreSQL clock AFTER acquiring row locks. Otherwise a
+	// queued concurrent evaluator could use an older time than the
+	// evaluator that just committed an incident, reversing its timestamps.
+	var at time.Time
+	if err = tx.QueryRowContext(ctx, "SELECT clock_timestamp()").Scan(&at); err != nil {
+		return nil, fmt.Errorf("read rule evaluation clock: %w", err)
+	}
+	at = at.UTC().Truncate(time.Microsecond)
 
 	for i := range records {
 		r := &records[i]
