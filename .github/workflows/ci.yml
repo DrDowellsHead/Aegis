@@ -91,6 +91,46 @@ jobs:
           cache: false
       - name: PostgreSQL + authenticated gRPC integration
         run: go test -p 1 -race -count=1 -timeout=90s ./internal/storage ./internal/telemetry ./internal/history
+      - name: PostgreSQL 17 backup and restore into an empty database
+        shell: bash
+        env:
+          AEGIS_DATABASE_URL: postgres://aegis_test:ci-test-only@127.0.0.1:5432/aegis_test?sslmode=disable
+          AEGIS_RESTORE_DATABASE_URL: postgres://aegis_test:ci-test-only@127.0.0.1:5432/aegis_restore?sslmode=disable
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -o ci-aegis ./cmd/aegis
+          ./ci-aegis migrate
+          docker run --rm --network host -e PGPASSWORD=ci-test-only postgres:17 \
+            psql -h 127.0.0.1 -U aegis_test -d aegis_test -v ON_ERROR_STOP=1 \
+            -c "INSERT INTO aegis_agents(agent_id,registered) VALUES ('123e4567-e89b-42d3-a456-426614174000', true) ON CONFLICT (agent_id) DO UPDATE SET registered=true"
+          docker run --rm --network host -e PGPASSWORD=ci-test-only postgres:17 \
+            psql -h 127.0.0.1 -U aegis_test -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE aegis_restore'
+          mkdir -m 700 ci-backups
+          docker run --rm --network host -v "$PWD:/work" -w /work \
+            -e AEGIS_DATABASE_URL postgres:17 \
+            ./ci-aegis backup --output /work/ci-backups/fixture.dump
+          cp ci-backups/fixture.dump ci-backups/tampered.dump
+          cp ci-backups/fixture.dump.sha256 ci-backups/tampered.dump.sha256
+          printf 'corrupted' >> ci-backups/tampered.dump
+          if docker run --rm --network host -v "$PWD:/work" -w /work \
+            -e AEGIS_RESTORE_DATABASE_URL postgres:17 \
+            ./ci-aegis restore --input /work/ci-backups/tampered.dump --confirm-empty-target; then
+            echo "Corrupt backup was wrongly accepted"
+            exit 1
+          fi
+          docker run --rm --network host -v "$PWD:/work" -w /work \
+            -e AEGIS_RESTORE_DATABASE_URL postgres:17 \
+            ./ci-aegis restore --input /work/ci-backups/fixture.dump --confirm-empty-target
+          docker run --rm --network host -e PGPASSWORD=ci-test-only postgres:17 \
+            psql -h 127.0.0.1 -U aegis_test -d aegis_restore -v ON_ERROR_STOP=1 \
+            -Atc "SELECT count(*) FROM aegis_agents WHERE agent_id='123e4567-e89b-42d3-a456-426614174000' AND registered" | grep -qx 1
+          if docker run --rm --network host -v "$PWD:/work" -w /work \
+            -e AEGIS_RESTORE_DATABASE_URL postgres:17 \
+            ./ci-aegis restore --input /work/ci-backups/fixture.dump --confirm-empty-target; then
+            echo "Restore into populated target was wrongly accepted"
+            exit 1
+          fi
 
   web:
     name: Web dashboard (TypeScript and production bundle)

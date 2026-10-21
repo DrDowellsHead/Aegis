@@ -84,6 +84,10 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return runHistory(ctx, args[1:], errOut)
 	case "migrate":
 		return runMigrate(ctx, args[1:], out, errOut)
+	case "backup":
+		return runBackup(ctx, args[1:], out, errOut)
+	case "restore":
+		return runRestore(ctx, args[1:], out, errOut)
 	case "provision":
 		return runProvision(args[1:], out, errOut)
 	case "agent-token":
@@ -133,5 +137,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|notify|watch|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|provision|agent-token|cert|tls|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|notify|watch|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|backup|restore|provision|agent-token|cert|tls|check|collect|agent|version|help> [options]")
 }

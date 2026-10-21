@@ -1048,3 +1048,24 @@ See [ADR 0029](docs/adr/0029-backpressure.md).
 
 Before any stable release we must still run the postponed operating-system,
 network-interruption, real disk-full, Windows ACL and PostgreSQL recovery tests.
+
+## Резервная копия и восстановление (фаза 6.6)
+
+Оператору сервера необходимы PostgreSQL client tools `pg_dump`/`pg_restore`
+версии 17 (или совместимой с сервером). На машине агента они не нужны.
+Приложение сохраняет custom-format архив и файл `.sha256`, не
+перезаписывая уже существующие резервные копии. Секреты передаются
+через переменные окружения, не в командной строке.
+
+```sh
+mkdir -m 700 backups
+export AEGIS_DATABASE_URL='postgres://user:password@127.0.0.1:5432/aegis?sslmode=disable'
+./aegis backup --output backups/aegis-2026-10-21.dump
+```
+
+Для восстановления **заранее создайте отдельную пустую БД** и установите
+`AEGIS_RESTORE_DATABASE_URL` (не `AEGIS_DATABASE_URL`). Команда
+`restore` никогда не удаляет существующие данные и требует
+`--confirm-empty-target`. Используйте защищённое TLS-подключение к
+удалённым БД. Подробности и контрольный список:
+[ADR 0030](docs/adr/0030-postgresql-backup-restore.md).

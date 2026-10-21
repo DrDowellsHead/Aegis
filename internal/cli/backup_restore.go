@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
@@ -299,6 +298,3 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 	return 0
 }
 
-// Date is intentionally not used in the archive format: every dump is
-// content-addressed by its SHA-256 and has an operator-selected filename.
-var _ = time.Second
