@@ -63,6 +63,15 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
       }], has_more: false })
       return
     }
+    if (name === '/api/web/watch/status') {
+      await respond(200, {
+        state: 'ok', started_at: '2026-10-21T11:00:00Z',
+        finished_at: '2026-10-21T11:00:01Z', last_success_at: '2026-10-21T11:00:01Z',
+        progress_at: '2026-10-21T11:00:01Z',
+        agents_checked: 5, rules_checked: 8, errors: 0,
+        interval_seconds: 30, offline_after_seconds: 60, stale: false
+      }); return
+    }
     if (name === '/api/web/notifications/stats') {
       await respond(200, { pending: 3, retry: 1, leased: 0, sent: 7, dead: 0 }); return
     }
@@ -388,4 +397,14 @@ test('journal validates UUID and search length before API request', async ({ pag
   await page.getByLabel('Поиск по названию').fill('x')
   await page.getByRole('button', { name: 'Искать' }).click()
   await expect(page.getByRole('alert')).toContainText('2–80')
+})
+
+test('incidents view shows latest automatic monitoring health', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/incidents')
+  const status = page.getByLabel('Автоматические проверки')
+  await expect(status).toContainText('Последняя проверка успешна')
+  await expect(status).toContainText('Проверено агентов: 5')
+  await expect(status).toContainText('правил: 8')
+  await expect(status).toContainText('Интервал: 30 сек.')
 })
