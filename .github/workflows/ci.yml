@@ -123,6 +123,8 @@ jobs:
           docker run --rm --read-only --user 10001:10001 \
             --mount type=bind,source="$PWD/deploy/compose/config/receiver.json",target=/etc/aegis/receiver.json,readonly \
             aegis-server:ci validate-config --config /etc/aegis/receiver.json
+      - name: Exercise Compose startup migrations and real durable TLS send
+        run: bash deploy/compose/smoke.sh
 
   integration:
     runs-on: ubuntu-latest

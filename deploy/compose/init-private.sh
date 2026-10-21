@@ -21,7 +21,9 @@ if ! [[ "$pg_uid" =~ ^[0-9]+$ && "$pg_gid" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-install -d -m 0700 private
+# Allow the nonroot operator to traverse known bind paths without listing
+# secret filenames; individual files and private subdirectories remain 0600/0700.
+install -d -m 0711 private
 for component in receiver dashboard notify; do
   install -d -m 0700 "private/$component"
   chown 10001:10001 "private/$component"
