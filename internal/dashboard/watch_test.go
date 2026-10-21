@@ -57,4 +57,3 @@ func TestWatchStatusDatabaseErrorsNotLeaked(t *testing.T) {
 	}
 }
 
-var _ = time.Minute
