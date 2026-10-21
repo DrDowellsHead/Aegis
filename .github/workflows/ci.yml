@@ -77,6 +77,18 @@ jobs:
         with:
           go-version: '1.27.3'
           cache: false
+      - name: Prepare security dependency update proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          go get github.com/jackc/pgx/v5@v5.9.2 golang.org/x/net@v0.60.0
+          go mod tidy
+          echo AEGIS_GO_MOD_BEGIN
+          cat go.mod
+          echo AEGIS_GO_MOD_END
+          echo AEGIS_GO_SUM_BEGIN
+          cat go.sum
+          echo AEGIS_GO_SUM_END
       - name: Verify module checksums
         run: |
           go mod download
@@ -92,11 +104,15 @@ jobs:
         with:
           node-version: '22'
       - name: Audit all locked npm dependencies
+        if: always()
         working-directory: web
         run: |
           npm ci --ignore-scripts --no-fund
           npm audit --audit-level=high
+      - name: Require updated dependencies committed
+        run: git diff --exit-code -- go.mod go.sum
       - name: Enforce release workflow policy
+        if: always()
         run: python3 -m unittest discover -s scripts -p 'test_release_quality.py' -v
 
   integration:
