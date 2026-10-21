@@ -105,6 +105,22 @@ func (p *Postgres) ClaimNotification(ctx context.Context, channels []string) (*N
 	tx,err:=p.db.BeginTx(ctx,nil)
 	if err!=nil{return nil,err}
 	defer tx.Rollback()
+	// A worker can crash on its eighth lease; such jobs must be finalized
+	// instead of remaining forever in the 'leased' state.
+	_,err=tx.ExecContext(ctx,`
+		WITH expired AS (
+			UPDATE aegis_notification_jobs
+			SET status='dead',lease_token=NULL,leased_until=NULL,
+				last_error_code='lease_expired'
+			WHERE status='leased' AND attempt_count>=8
+			  AND leased_until<=clock_timestamp()
+			RETURNING id,attempt_count
+		)
+		INSERT INTO aegis_notification_attempts
+			(job_id,attempt_number,outcome,error_code)
+		SELECT id,attempt_count,'dead','lease_expired' FROM expired
+		ON CONFLICT(job_id,attempt_number) DO NOTHING`)
+	if err!=nil {return nil,fmt.Errorf("reap exhausted notification leases: %w",err)}
 	var job NotificationJob
 	err=tx.QueryRowContext(ctx,`
 		WITH candidate AS (
