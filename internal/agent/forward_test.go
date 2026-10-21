@@ -64,10 +64,14 @@ func TestRetriesSameMeasurementAndRecoversAfterRestart(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("durably acknowledged record remains queued: %d", n)
 	}
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
 	restarted, err := spool.Open(path, agentID, spool.MaxRecordBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer restarted.Close()
 	// Start again after the acknowledged sample was removed.
 	resumed := &failThenSend{}
 	if err := Forward(ctx, source, resumed, restarted, log, testOptions(1)); err != nil {
@@ -121,10 +125,14 @@ func TestCanceledWhileOfflineKeepsOutbox(t *testing.T) {
 	if n == 0 {
 		t.Fatal("lost all offline measurements")
 	}
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
 	again, err := spool.Open(path, agentID, spool.MaxRecordBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer again.Close()
 	m, _ := again.Stats()
 	if m != n {
 		t.Fatalf("recovery changed %d to %d", n, m)
