@@ -139,7 +139,9 @@ func runBackup(ctx context.Context, args []string, out, errOut io.Writer) int {
 	flags.SetOutput(errOut)
 	output := flags.String("output", "", "new custom-format PostgreSQL archive in a private directory")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *output == "" {
@@ -147,7 +149,10 @@ func runBackup(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	dest, err := filepath.Abs(*output)
-	if err != nil { fmt.Fprintln(errOut, err); return 2 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
 	if err := privateBackupDirectory(filepath.Dir(dest)); err != nil {
 		fmt.Fprintln(errOut, err)
 		return 2
@@ -163,18 +168,36 @@ func runBackup(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	raw := os.Getenv("AEGIS_DATABASE_URL")
 	conn, err := parsePGConnection(raw)
-	if err != nil { fmt.Fprintln(errOut, err); return 2 }
-	if _, err := exec.LookPath("pg_dump"); err != nil { fmt.Fprintln(errOut, "pg_dump is required"); return 1 }
-	if _, err := exec.LookPath("pg_restore"); err != nil { fmt.Fprintln(errOut, "pg_restore is required"); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	if _, err := exec.LookPath("pg_dump"); err != nil {
+		fmt.Fprintln(errOut, "pg_dump is required")
+		return 1
+	}
+	if _, err := exec.LookPath("pg_restore"); err != nil {
+		fmt.Fprintln(errOut, "pg_restore is required")
+		return 1
+	}
 	db, err := openOperatorDatabase(ctx)
-	if err != nil { fmt.Fprintln(errOut, "source database not ready:", err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, "source database not ready:", err)
+		return 1
+	}
 	_ = db.Close()
 
 	tmp, err := os.CreateTemp(filepath.Dir(dest), ".aegis-backup-*")
-	if err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
-	if err := tmp.Chmod(0600); err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if err := tmp.Chmod(0600); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	// pg_dump writes the same private, already-created temporary file.
 	cmd := pgCommand(ctx, "pg_dump", conn,
 		"--format=custom", "--no-owner", "--no-privileges", "--file="+tmp.Name(),
@@ -183,14 +206,23 @@ func runBackup(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "pg_dump failed (check PostgreSQL connection and client version)")
 		return 1
 	}
-	if err := tmp.Sync(); err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if err := tmp.Sync(); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	if err := checkArchive(ctx, tmp.Name()); err != nil {
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
 	digest, err := fileDigest(tmp.Name())
-	if err != nil { fmt.Fprintln(errOut, err); return 1 }
-	if err := tmp.Close(); err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
+	if err := tmp.Close(); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	// Hard-linking in the same directory publishes without replacing an
 	// existing file, including a symlink installed during the dump.
 	if err := os.Link(tmp.Name(), dest); err != nil {
@@ -207,7 +239,7 @@ func runBackup(ctx context.Context, args []string, out, errOut io.Writer) int {
 	syncErr := sidecar.Sync()
 	closeErr := sidecar.Close()
 	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
-		_ = os.Remove(dest+".sha256")
+		_ = os.Remove(dest + ".sha256")
 		_ = os.Remove(dest)
 		fmt.Fprintln(errOut, "cannot durably publish backup checksum:", err)
 		return 1
@@ -226,7 +258,9 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 	input := flags.String("input", "", "existing custom-format PostgreSQL archive")
 	confirm := flags.Bool("confirm-empty-target", false, "explicitly authorize restore ONLY to an empty separate database")
 	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) { return 0 }
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *input == "" || !*confirm {
@@ -234,12 +268,27 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	src, err := filepath.Abs(*input)
-	if err != nil { fmt.Fprintln(errOut, err); return 2 }
-	if err := privateBackupDirectory(filepath.Dir(src)); err != nil { fmt.Fprintln(errOut, err); return 2 }
-	if err := regularPrivateFile(src); err != nil { fmt.Fprintln(errOut, err); return 1 }
-	if err := regularPrivateFile(src+".sha256"); err != nil { fmt.Fprintln(errOut, err); return 1 }
-	rawDigest, err := os.ReadFile(src+".sha256")
-	if err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	if err := privateBackupDirectory(filepath.Dir(src)); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	if err := regularPrivateFile(src); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
+	if err := regularPrivateFile(src + ".sha256"); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
+	rawDigest, err := os.ReadFile(src + ".sha256")
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	want := strings.TrimSpace(string(rawDigest))
 	if len(want) != 64 {
 		fmt.Fprintln(errOut, "invalid backup SHA-256 sidecar")
@@ -250,15 +299,27 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	got, err := fileDigest(src)
-	if err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	if got != want {
 		fmt.Fprintln(errOut, "backup checksum mismatch; database left untouched")
 		return 1
 	}
-	if _, err := exec.LookPath("pg_restore"); err != nil { fmt.Fprintln(errOut, "pg_restore is required"); return 1 }
-	if err := checkArchive(ctx, src); err != nil { fmt.Fprintln(errOut, err); return 1 }
+	if _, err := exec.LookPath("pg_restore"); err != nil {
+		fmt.Fprintln(errOut, "pg_restore is required")
+		return 1
+	}
+	if err := checkArchive(ctx, src); err != nil {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
 	conn, err := parsePGConnection(os.Getenv("AEGIS_RESTORE_DATABASE_URL"))
-	if err != nil { fmt.Fprintln(errOut, "invalid restore target:", err); return 2 }
+	if err != nil {
+		fmt.Fprintln(errOut, "invalid restore target:", err)
+		return 2
+	}
 	source := os.Getenv("AEGIS_DATABASE_URL")
 	if source != "" && source == os.Getenv("AEGIS_RESTORE_DATABASE_URL") {
 		fmt.Fprintln(errOut, "source and restore target must be different databases")
@@ -266,11 +327,18 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	target, err := storage.Open(connectCtx, os.Getenv("AEGIS_RESTORE_DATABASE_URL"))
-	if err != nil { cancel(); fmt.Fprintln(errOut, "restore target unavailable:", err); return 1 }
+	if err != nil {
+		cancel()
+		fmt.Fprintln(errOut, "restore target unavailable:", err)
+		return 1
+	}
 	defer target.Close()
 	empty, err := target.EmptyForRestore(connectCtx)
 	cancel()
-	if err != nil { fmt.Fprintln(errOut, "cannot validate empty restore target:", err); return 1 }
+	if err != nil {
+		fmt.Fprintln(errOut, "cannot validate empty restore target:", err)
+		return 1
+	}
 	if !empty {
 		fmt.Fprintln(errOut, "restore target is not empty; refusing to replace existing objects")
 		return 1
@@ -297,4 +365,3 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fmt.Fprintln(out, "PostgreSQL restored and migrations verified in the separate target database")
 	return 0
 }
-

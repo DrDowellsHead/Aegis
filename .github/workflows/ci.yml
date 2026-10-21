@@ -107,25 +107,25 @@ jobs:
             psql -h 127.0.0.1 -U aegis_test -d postgres -v ON_ERROR_STOP=1 \
             -c 'CREATE DATABASE aegis_restore'
           mkdir -m 700 ci-backups
-          docker run --rm --network host -v "$PWD:/work" -w /work \
+          docker run --rm --network host --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work \
             -e AEGIS_DATABASE_URL postgres:17 \
             ./ci-aegis backup --output /work/ci-backups/fixture.dump
           cp ci-backups/fixture.dump ci-backups/tampered.dump
           cp ci-backups/fixture.dump.sha256 ci-backups/tampered.dump.sha256
           printf 'corrupted' >> ci-backups/tampered.dump
-          if docker run --rm --network host -v "$PWD:/work" -w /work \
+          if docker run --rm --network host --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work \
             -e AEGIS_RESTORE_DATABASE_URL postgres:17 \
             ./ci-aegis restore --input /work/ci-backups/tampered.dump --confirm-empty-target; then
             echo "Corrupt backup was wrongly accepted"
             exit 1
           fi
-          docker run --rm --network host -v "$PWD:/work" -w /work \
+          docker run --rm --network host --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work \
             -e AEGIS_RESTORE_DATABASE_URL postgres:17 \
             ./ci-aegis restore --input /work/ci-backups/fixture.dump --confirm-empty-target
           docker run --rm --network host -e PGPASSWORD=ci-test-only postgres:17 \
             psql -h 127.0.0.1 -U aegis_test -d aegis_restore -v ON_ERROR_STOP=1 \
             -Atc "SELECT count(*) FROM aegis_agents WHERE agent_id='123e4567-e89b-42d3-a456-426614174000' AND registered" | grep -qx 1
-          if docker run --rm --network host -v "$PWD:/work" -w /work \
+          if docker run --rm --network host --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work \
             -e AEGIS_RESTORE_DATABASE_URL postgres:17 \
             ./ci-aegis restore --input /work/ci-backups/fixture.dump --confirm-empty-target; then
             echo "Restore into populated target was wrongly accepted"
