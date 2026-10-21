@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/storage"
@@ -39,7 +38,7 @@ func runWatch(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	db, err := storage.Open(checkCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(checkCtx)
 	if err != nil {
 		cancel()
 		fmt.Fprintln(errOut, "watch database unavailable")

@@ -14,7 +14,6 @@ import (
 
 	"github.com/DrDowellsHead/Aegis/internal/dashboard"
 	"github.com/DrDowellsHead/Aegis/internal/history"
-	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
 
 func runDashboard(ctx context.Context, args []string, errOut io.Writer) int {
@@ -72,7 +71,7 @@ func runDashboard(ctx context.Context, args []string, errOut io.Writer) int {
 	}
 	dbCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	db, err := storage.Open(dbCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(dbCtx)
 	if err != nil {
 		fmt.Fprintln(errOut, "dashboard database unavailable")
 		return 1

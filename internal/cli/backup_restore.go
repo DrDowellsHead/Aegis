@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DrDowellsHead/Aegis/internal/secrets"
 	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
 
@@ -167,7 +168,8 @@ func runBackup(ctx context.Context, args []string, out, errOut io.Writer) int {
 			return 1
 		}
 	}
-	raw := os.Getenv("AEGIS_DATABASE_URL")
+	raw, err := secrets.Resolve("AEGIS_DATABASE_URL")
+	if err != nil { fmt.Fprintln(errOut, "invalid source secret:", err); return 2 }
 	conn, err := parsePGConnection(raw)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
@@ -316,18 +318,21 @@ func runRestore(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
-	conn, err := parsePGConnection(os.Getenv("AEGIS_RESTORE_DATABASE_URL"))
+	restoreURL, err := secrets.Resolve("AEGIS_RESTORE_DATABASE_URL")
+	if err != nil { fmt.Fprintln(errOut, "invalid restore secret:", err); return 2 }
+	conn, err := parsePGConnection(restoreURL)
 	if err != nil {
 		fmt.Fprintln(errOut, "invalid restore target:", err)
 		return 2
 	}
-	source := os.Getenv("AEGIS_DATABASE_URL")
-	if source != "" && source == os.Getenv("AEGIS_RESTORE_DATABASE_URL") {
+	source, err := secrets.Resolve("AEGIS_DATABASE_URL")
+	if err != nil { fmt.Fprintln(errOut, "invalid source secret:", err); return 2 }
+	if source != "" && source == restoreURL {
 		fmt.Fprintln(errOut, "source and restore target must be different databases")
 		return 2
 	}
 	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	target, err := storage.Open(connectCtx, os.Getenv("AEGIS_RESTORE_DATABASE_URL"))
+	target, err := storage.Open(connectCtx, restoreURL)
 	if err != nil {
 		cancel()
 		fmt.Fprintln(errOut, "restore target unavailable:", err)

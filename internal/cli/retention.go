@@ -17,7 +17,7 @@ import (
 func openOperatorDatabase(ctx context.Context) (*storage.Postgres, error) {
 	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	db, err := storage.Open(connectCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(connectCtx)
 	if err != nil {
 		return nil, err
 	}

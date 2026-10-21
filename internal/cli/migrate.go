@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
-	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
 
 // runMigrate is an operator command. Database secrets are supplied via an
@@ -19,7 +17,7 @@ func runMigrate(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	dbCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	db, err := storage.Open(dbCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(dbCtx)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
 		return 1

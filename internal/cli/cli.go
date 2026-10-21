@@ -60,6 +60,10 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 			return 1
 		}
 		return 0
+	case "start":
+		return runStart(ctx, args[1:], errOut)
+	case "validate-config":
+		return runValidateConfig(args[1:], out, errOut)
 	case "config":
 		return runAdminConfig(args[1:], out, errOut)
 	case "doctor":
@@ -137,5 +141,5 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|notify|watch|dashboard|dashboard-user|history|config|doctor|audit|storage|retention|backfill|migrate|backup|restore|provision|agent-token|cert|tls|check|collect|agent|version|help> [options]")
+	fmt.Fprintln(w, "Usage: aegis <serve|receive|send|forward|notify|watch|dashboard|dashboard-user|history|start|validate-config|config|doctor|audit|storage|retention|backfill|migrate|backup|restore|provision|agent-token|cert|tls|check|collect|agent|version|help> [options]")
 }

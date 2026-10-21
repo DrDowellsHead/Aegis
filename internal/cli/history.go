@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/history"
-	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
 
 func runHistory(ctx context.Context, args []string, errOut io.Writer) int {
@@ -43,7 +42,7 @@ func runHistory(ctx context.Context, args []string, errOut io.Writer) int {
 	}
 	dbCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	db, err := storage.Open(dbCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(dbCtx)
 	if err != nil {
 		fmt.Fprintln(errOut, "history database unavailable:", err)
 		return 1

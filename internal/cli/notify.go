@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/notify"
-	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
 
 // runNotify is a separate supervised process; incident writes never depend
@@ -54,7 +53,7 @@ func runNotify(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	db, err := storage.Open(checkCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(checkCtx)
 	if err != nil {
 		cancel()
 		fmt.Fprintln(errOut, "notification database unavailable")

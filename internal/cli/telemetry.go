@@ -9,13 +9,12 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/identity"
 	"github.com/DrDowellsHead/Aegis/internal/metrics"
 	"github.com/DrDowellsHead/Aegis/internal/observability"
-	"github.com/DrDowellsHead/Aegis/internal/storage"
+	"github.com/DrDowellsHead/Aegis/internal/secrets"
 	"github.com/DrDowellsHead/Aegis/internal/telemetry"
 )
 
@@ -96,12 +95,17 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "--tls-ca-cert requires --tls-host so the complete chain and SAN can be checked")
 		return 2
 	}
+	diagnosticsToken, err := secrets.Resolve("AEGIS_DIAGNOSTICS_TOKEN")
+	if err != nil {
+		fmt.Fprintln(errOut, "diagnostics secret:", err)
+		return 2
+	}
 	if *diagnosticsAddress != "" {
 		if err := observability.RequireLoopback(*diagnosticsAddress); err != nil {
 			fmt.Fprintln(errOut, "invalid diagnostics address:", err)
 			return 2
 		}
-		if len(os.Getenv("AEGIS_DIAGNOSTICS_TOKEN")) < 32 {
+		if len(diagnosticsToken) < 32 {
 			fmt.Fprintln(errOut, "diagnostics require AEGIS_DIAGNOSTICS_TOKEN with at least 32 random bytes")
 			return 2
 		}
@@ -123,7 +127,7 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	}
 	dbCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	db, err := storage.Open(dbCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(dbCtx)
 	if err != nil {
 		fmt.Fprintln(errOut, "database:", err)
 		return 2
@@ -175,7 +179,7 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	defer stop()
 	diagnosticsDone := make(chan error, 1)
 	go func() {
-		err := observability.Serve(receiverCtx, diagnostics, os.Getenv("AEGIS_DIAGNOSTICS_TOKEN"), observer, db.Stats, logger)
+		err := observability.Serve(receiverCtx, diagnostics, diagnosticsToken, observer, db.Stats, logger)
 		if err != nil {
 			stop()
 		}

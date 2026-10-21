@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/adminconfig"
-	"github.com/DrDowellsHead/Aegis/internal/storage"
+	"github.com/DrDowellsHead/Aegis/internal/secrets"
 )
 
 // AEGIS_OPERATOR is self-declared until an authenticated administrator
@@ -78,11 +78,12 @@ func runDoctor(ctx context.Context, args []string, out, errOut io.Writer) int {
 	} else {
 		report.Checks = append(report.Checks, "admin_config_invalid")
 	}
-	if os.Getenv("AEGIS_DATABASE_URL") == "" {
+	dsn, secretErr := secrets.Resolve("AEGIS_DATABASE_URL")
+	if secretErr != nil || dsn == "" {
 		report.Checks = append(report.Checks, "database_url_missing")
 	} else {
 		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		db, err := storage.Open(checkCtx, os.Getenv("AEGIS_DATABASE_URL"))
+		db, err := openConfiguredDatabase(checkCtx)
 		if err != nil {
 			report.Checks = append(report.Checks, "database_connection_failed")
 		} else {

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/adminconfig"
-	"github.com/DrDowellsHead/Aegis/internal/storage"
 )
 
 // backfill is intentionally an explicit operator command: schema migrations
@@ -36,7 +35,7 @@ func runBackfill(ctx context.Context, args []string, out, errOut io.Writer) (cod
 		return 2
 	}
 	connCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	db, err := storage.Open(connCtx, os.Getenv("AEGIS_DATABASE_URL"))
+	db, err := openConfiguredDatabase(connCtx)
 	cancel()
 	if err != nil {
 		fmt.Fprintln(errOut, err)
