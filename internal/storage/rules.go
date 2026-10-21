@@ -294,9 +294,13 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 		}
 		// The incident and its state transition are committed in the very
 		// same transaction as the rule latch; no half-written incidents.
-		if out.Firing {
+		// A retained firing latch with insufficient data is NOT evidence
+		// of a currently abnormal condition. Keep existing incidents
+		// intact, but neither escalate nor re-open suppressed episodes.
+		switch out.Status {
+		case "firing":
 			err = ensureIncident(ctx, tx, r.AgentID, r.ID, "threshold", r.Name, at)
-		} else {
+		case "normal":
 			err = resolveIncident(ctx, tx, r.AgentID, r.ID, "threshold", "condition_recovered", at)
 		}
 		if err != nil {
