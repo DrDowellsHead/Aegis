@@ -957,3 +957,39 @@ go run ./cmd/aegis agent-token revoke `
 GitHub, бэкапах с широким доступом и логах.
 
 Процедура и ограничения: [ADR 0025](docs/adr/0025-agent-credential-lifecycle.md).
+
+## Фаза 6.2 — проверка TLS и безопасная смена CA
+
+Сначала проверьте серверный сертификат и соответствующий ключ:
+
+```powershell
+go run ./cmd/aegis tls check `
+  --tls-cert "server.pem" `
+  --tls-key "server.key" `
+  --ca-cert "ca.pem" `
+  --host "monitor.example.com"
+```
+
+Команда сообщает SHA-256 fingerprint, SAN, даты действия, срок до
+истечения и результат проверки цепочки доверия. Истекающий в течение
+30 суток сертификат даёт ненулевой код возврата.
+
+Для смены CA без резкого отказа всех агентов создайте новый trust bundle:
+
+```powershell
+go run ./cmd/aegis tls bundle `
+  --current-ca "old-ca.pem" `
+  --next-ca "new-ca.pem" `
+  --output "overlap-ca.pem"
+```
+
+**Важно:** сначала проверьте fingerprint нового CA по независимому
+доверенному каналу. Распространите overlap bundle на агенты, перезапустите
+их и убедитесь, что подключение к старому серверу работает. Затем
+переключите сертификат сервера и перезапустите receiver. Только после
+проверки всех агентов замените overlap bundle на new-only CA.
+
+Получающий gRPC-сервер принимает дополнительные флаги `--tls-host`
+и `--tls-ca-cert` для проверки SAN и цепочки до запуска, а удалённый
+dashboard — `--tls-ca-cert`. Самостоятельного hot reload и ACME пока
+нет. Детали: [ADR 0026](docs/adr/0026-tls-certificate-lifecycle.md).
