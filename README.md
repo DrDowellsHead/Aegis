@@ -746,3 +746,68 @@ Heartbeat отправляется вне зависимости от очере
 и гарантированная доставка будут на следующих этапах.
 
 [ADR 0021](docs/adr/0021-incident-noise.md).
+
+## Шаг 5.5 — Email, Telegram и Webhook
+
+1. Получите `develop` и запустите `aegis migrate` (миграция **012**).
+2. Запустите один процесс `aegis notify` под supervisor/systemd с
+   настройками **до** того, как начнут возникать новые события инцидентов.
+   Без включённого маршрута события в очередь доставки не добавляются.
+3. Откройте веб-панель → **Инциденты** → **Очередь уведомлений**:
+   pending/retry/leased/sent/dead отражают сохранённые состояния.
+4. Создайте инцидент кнопкой проверки правил/связи — worker отправит
+   `opened` по настроенным каналам, затем `escalated` и `resolved`
+   при соответствующих переходах.
+
+**Пример для Telegram (PowerShell):**
+
+```powershell
+$env:AEGIS_DATABASE_URL = "<your PostgreSQL DSN>"
+$env:AEGIS_TELEGRAM_TOKEN = "<your private bot token>"
+go run ./cmd/aegis migrate
+go run ./cmd/aegis notify --telegram-chat-id "-1001234567890"
+```
+
+**Пример для Email (PowerShell):**
+
+```powershell
+$env:AEGIS_SMTP_USER = "<SMTP login>"
+$env:AEGIS_SMTP_PASSWORD = "<private SMTP password>"
+go run ./cmd/aegis notify --email-to "ops@example.com" `
+    --smtp-from "aegis@example.com" `
+    --smtp-address "smtp.example.com:465"
+```
+
+Поддерживается **implicit TLS SMTP** с проверкой сертификата.
+SMTP 587/STARTTLS не включён в текущую реализацию.
+
+**Пример для webhook (PowerShell):**
+
+```powershell
+$env:AEGIS_WEBHOOK_SECRET = "<32 or more random secret bytes>"
+go run ./cmd/aegis notify --webhook-url "https://hooks.example.com/aegis"
+```
+
+Webhook принимает JSON и должен проверять
+`X-Aegis-Signature: sha256=<HMAC-SHA256(body)>` и
+`Idempotency-Key`. Адрес должен быть публичным HTTPS на порту 443.
+Защита запрещает частные и локальные IP, пользовательские секреты
+в URL, запросы с query-параметрами и редиректы.
+
+Каналы можно указать **одновременно** в одном процессе, объединив
+соответствующие флаги. Секреты передаются только через переменные
+окружения сервера, а не Git/React. Маршруты сохраняются в PostgreSQL
+без паролей или токенов, до одного адресата на канал.
+`--once` выполняет текущие доступные задания и завершает работу,
+обычный режим периодически опрашивает очередь (`--poll 3s`).
+
+Отправка **at-least-once**: после падения или потери подтверждения
+возможны повторы. У Webhook используйте заголовок
+`Idempotency-Key` для дедупликации.
+
+**Важно:** отправка уведомлений автоматическая, но *обнаружение*
+инцидентов всё ещё запускается вручную (5.3–5.4); самостоятельного
+планировщика проверки условий пока нет. Сообщение не означает,
+что сбой был обнаружен без участия оператора.
+
+[ADR 0022](docs/adr/0022-notification-outbox.md).
