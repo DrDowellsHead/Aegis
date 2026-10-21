@@ -76,6 +76,8 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return runDashboardUser(args[1:], out, errOut)
 	case "dashboard":
 		return runDashboard(ctx, args[1:], errOut)
+	case "notify":
+		return runNotify(ctx, args[1:], out, errOut)
 	case "history":
 		return runHistory(ctx, args[1:], errOut)
 	case "migrate":
