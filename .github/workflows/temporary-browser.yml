@@ -2,7 +2,7 @@ name: Temporary browser E2E validation
 on:
   push:
     branches: [develop]
-    paths: [.github/workflows/temporary-browser.yml]
+    paths: [.github/workflows/temporary-browser.yml, web/package.json]
 permissions:
   contents: read
 jobs:
