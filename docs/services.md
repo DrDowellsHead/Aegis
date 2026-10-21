@@ -113,12 +113,12 @@ to Windows securely through `PSCredential`, not embedded in
 .\SERVICE\remove-service.ps1 -Component agent
 ```
 
-For a server receiver, replace `agent` with `receiver` and grant
-the account access to the private PostgreSQL URL file specified by
-`AEGIS_DATABASE_URL_FILE` in the host environment. The Windows
-service template does not set this environment variable itself:
-configure it securely for the service account or install a separate
-credential-aware launcher in a later deployment phase.
+For a server receiver, use `-Component receiver` and pass the extra
+`-DatabaseURLFile 'C:\\ProgramData\\Aegis\\private\\database.url'`
+parameter. The installer saves **only the secret file path**, never the
+password, as a per-service `AEGIS_DATABASE_URL_FILE` environment entry
+in SCM. The service account must have read access to that file. Avoid
+machine-wide environment variables containing database passwords.
 
 The account must be able to reach the requested Windows volume for
 disk usage metrics; mapped interactive-user drive letters may not be

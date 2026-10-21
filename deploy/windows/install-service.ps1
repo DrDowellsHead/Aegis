@@ -13,15 +13,26 @@ param(
     [string]$Config,
 
     [Parameter(Mandatory = $true)]
-    [System.Management.Automation.PSCredential]$Credential
+    [System.Management.Automation.PSCredential]$Credential,
+
+    [string]$DatabaseURLFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $name = if ($Component -eq 'agent') { 'AegisAgent' } else { 'AegisReceiver' }
 $exe = (Resolve-Path -LiteralPath $Executable -ErrorAction Stop).ProviderPath
 $cfg = (Resolve-Path -LiteralPath $Config -ErrorAction Stop).ProviderPath
+$dbFile = ''
+if ($Component -eq 'receiver') {
+    if ([string]::IsNullOrWhiteSpace($DatabaseURLFile)) {
+        throw 'Receiver requires -DatabaseURLFile pointing to an existing private PostgreSQL URL file.'
+    }
+    $dbFile = (Resolve-Path -LiteralPath $DatabaseURLFile -ErrorAction Stop).ProviderPath
+} elseif ($DatabaseURLFile -ne '') {
+    throw '-DatabaseURLFile is only valid for receiver.'
+}
 
-foreach ($value in @($exe, $cfg)) {
+foreach ($value in @($exe, $cfg, $dbFile)) {
     if ($value.Contains('"') -or $value.Contains([char]10) -or $value.Contains([char]13)) {
         throw 'Paths must not contain quotation marks or newlines.'
     }
@@ -40,6 +51,12 @@ if ($LASTEXITCODE -ne 0) {
 
 $command = '"' + $exe + '" start --config "' + $cfg + '" --component ' + $Component
 New-Service -Name $name -BinaryPathName $command -StartupType Automatic -Credential $Credential -Description "Aegis telemetry $Component"
+if ($Component -eq 'receiver') {
+    # Only a *path* is placed in SCM's per-service environment; no password.
+    New-ItemProperty -Path ("HKLM:\SYSTEM\CurrentControlSet\Services\" + $name) `
+        -Name Environment -PropertyType MultiString `
+        -Value @("AEGIS_DATABASE_URL_FILE=$dbFile") -Force | Out-Null
+}
 & sc.exe failure $name reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Write-Warning 'Service registered, but recovery actions could not be configured. Fix the service manually.'
