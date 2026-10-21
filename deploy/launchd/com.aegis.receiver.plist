@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.aegis.receiver</string>
+    <key>UserName</key><string>aegis</string>
+    <key>GroupName</key><string>aegis</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key>
+    <dict><key>SuccessfulExit</key><false/></dict>
+    <key>ThrottleInterval</key><integer>15</integer>
+    <key>WorkingDirectory</key><string>/var/db/aegis</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/aegis</string>
+        <string>start</string>
+        <string>--config</string>
+        <string>/usr/local/etc/aegis/receiver.json</string>
+        <string>--component</string>
+        <string>receiver</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict><key>AEGIS_DATABASE_URL_FILE</key><string>/usr/local/etc/aegis/private/database.url</string></dict>
+</dict>
+</plist>
