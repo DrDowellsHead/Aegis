@@ -276,3 +276,53 @@ $result.items | Format-Table agent_id, status, last_contact_at, last_sample_at, 
 `next_cursor` в следующем запросе. Секреты никогда не возвращаются.
 
 Подробнее: [ADR 0009](docs/adr/0009-agent-registry.md).
+
+## Retention и объём PostgreSQL (этап 3.8)
+
+После обновления `develop` выполните `aegis migrate` с корректным
+`AEGIS_DATABASE_URL`. Миграция 006 добавляет индекс для ограниченного
+по времени удаления. Она не удаляет измерения автоматически.
+
+Сначала проверьте размер базы и потенциальные кандидаты на очистку:
+
+```powershell
+go run ./cmd/aegis storage
+go run ./cmd/aegis retention --days 30
+```
+
+Команда `retention` **по умолчанию только считает** подходящие строки.
+Для фактического удаления нужны `--apply` и явно указанный scope:
+
+```powershell
+$agentId = (Get-Content local-agent.json | ConvertFrom-Json).agent_id
+go run ./cmd/aegis retention --days 30 --agent-id $agentId --apply --batch-size 500 --max-delete 10000
+```
+
+Для очистки всех агентов потребуется вместо `--agent-id`
+написать `--all-agents`. Без явного выбора scope удаление
+не запустится. Срок хранения задаётся `--days` (7..3650 дней).
+Каждый запуск удаляет максимум `--max-delete` строк (по умолчанию
+10 000) пакетами (по умолчанию 500). Для продолжения запустите
+команду повторно; она выведет количество удалённых строк в JSON.
+
+**До --apply сделайте бэкап.** Пример для локального PostgreSQL
+в Docker; экспортирование в файл вне контейнера через `docker cp`
+сохраняет бинарный `pg_dump` без повреждения PowerShell-перенаправлением:
+
+```powershell
+docker exec aegis-postgres pg_dump -U aegis -d aegis -Fc -f /tmp/aegis-before-retention.dump
+docker cp aegis-postgres:/tmp/aegis-before-retention.dump ./aegis-before-retention.dump
+```
+
+Проверьте, что файл на месте, и протестируйте восстановление в
+**отдельной тестовой базе**, прежде чем удалять историю в production.
+Не публикуйте дампы с телеметрией и секретами.
+Важно: `DELETE` в PostgreSQL обычно НЕ уменьшает файл таблицы сразу.
+Autovacuum освободит страницы для повторного использования; реальная
+ёмкость диска может остаться прежней. Обычный `VACUUM (ANALYZE)`
+не выполняется автоматически и не обещает возврата места ОС.
+
+Очистка использует `received_at`, а не часы агента `started_at`.
+Список зарегистрированных агентов и сведения о последнем контакте
+не удаляются при очистке истории. Полный разбор безопасности,
+ограничений и MVCC: [ADR 0010](docs/adr/0010-retention.md).
