@@ -38,7 +38,7 @@ type Receiver struct {
 	registry  identity.Registry
 	store     MeasurementStore
 	admission *receiverAdmission
-	metrics *observability.Registry
+	metrics   *observability.Registry
 }
 
 func (r *Receiver) Send(ctx context.Context, req *pb.SendRequest) (*pb.SendResponse, error) {

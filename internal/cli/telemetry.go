@@ -158,7 +158,9 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	}
 	listener, err := net.Listen("tcp", *address)
 	if err != nil {
-		if diagnostics != nil { _ = diagnostics.Close() }
+		if diagnostics != nil {
+			_ = diagnostics.Close()
+		}
 		fmt.Fprintln(errOut, err)
 		return 1
 	}
@@ -174,7 +176,9 @@ func runReceive(ctx context.Context, args []string, errOut io.Writer) int {
 	diagnosticsDone := make(chan error, 1)
 	go func() {
 		err := observability.Serve(receiverCtx, diagnostics, os.Getenv("AEGIS_DIAGNOSTICS_TOKEN"), observer, db.Stats, logger)
-		if err != nil { stop() }
+		if err != nil {
+			stop()
+		}
 		diagnosticsDone <- err
 	}()
 	err = telemetry.ServeReceiverObserved(receiverCtx, listener, logger, transport, registry, db, limits, observer)
