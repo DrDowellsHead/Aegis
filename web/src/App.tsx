@@ -165,7 +165,7 @@ function Planned({ kind }: { kind: 'incidents' | 'settings' }) {
         <EmptyState title="Раздел запланирован"
           description={incidents
             ? 'Этот раздел ещё не подключён и не генерирует оповещения.'
-            : 'Нельзя размещать токен AEGIS_HISTORY_TOKEN в браузере. Сначала необходим защищённый Go gateway.'} />
+            : 'Серверные токены нельзя размещать в браузере. Сначала необходим защищённый Go gateway.'} />
       </Card>
     </>
   )
