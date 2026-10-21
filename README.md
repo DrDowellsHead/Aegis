@@ -1112,3 +1112,12 @@ Linux systemd, macOS LaunchDaemon и Windows Service Control Manager
 Не запускайте службы от root или LocalSystem: нужен отдельный
 непривилегированный аккаунт и собственные права на конфигурацию,
 секреты и spool. Инструкции: [docs/services.md](docs/services.md).
+
+## Docker Compose — серверная установка (фаза 7.3)
+
+Для Linux VPS подготовлен стек PostgreSQL 17 + миграции + защищённый
+gRPC receiver + watch с необязательными профилями notify и HTTPS dashboard.
+Данные БД сохраняются в named volume, PostgreSQL не публикует host-порт,
+а закрытые ключи и токены передаются через отдельные private bind mounts,
+не через `.env`. Схема и инструкции:
+[deploy/compose/README.md](deploy/compose/README.md).

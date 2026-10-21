@@ -35,3 +35,8 @@ web/blob-report/
 configs/private/
 *.secret
 *.password
+
+# Docker Compose operator state - never commit
+/deploy/compose/private/
+/deploy/compose/.env
+/deploy/compose/backups/

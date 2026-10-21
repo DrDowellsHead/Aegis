@@ -179,7 +179,12 @@ Linux; центральный Go-сервер с PostgreSQL; веб-интерф
   перезапуска и автоматические проверки шаблонов и архивов
   (реализовано в develop; эксплуатационные испытания — 7.8).
   [Системные службы](services.md).
-- 7.3: Docker Compose для серверной части, схемы БД и конфигурации.
+- 7.3: Docker Compose v2 для PostgreSQL 17, миграций, gRPC receiver,
+  планировщика watch и подключаемых профилей Telegram notify и HTTPS dashboard;
+  внутренний backend, отдельный выход для уведомлений, named volume БД,
+  непривилегированный runtime, приватные file secrets и CI-проверки образа
+  и конфигурации (эксплуатационные испытания — фаза 7.8).
+  [Docker Compose](../deploy/compose/README.md).
 - 7.4: Windows installer, macOS package, Linux пакеты/службы.
 - 7.5: обновление и миграция конфигураций без потери данных.
 - 7.6: SHA256SUMS, подпись артефактов, notarization/signing где требуется.
