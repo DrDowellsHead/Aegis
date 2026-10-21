@@ -56,4 +56,3 @@ func TestWatchStatusDatabaseErrorsNotLeaked(t *testing.T) {
 		t.Fatalf("error leaked to browser: %d %s", w.Code, w.Body.String())
 	}
 }
-
