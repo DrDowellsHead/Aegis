@@ -22,16 +22,16 @@ const examplePassword = "test-dashboard-password-0123456789-abcdef"
 const exampleAgent = "123e4567-e89b-42d3-a456-426614174000"
 
 type stub struct {
-	queries int
-	stats   int
-	last    storage.AgentQuery
-	seriesCalls int
-	historyCalls int
-	seriesResult storage.SeriesResult
+	queries       int
+	stats         int
+	last          storage.AgentQuery
+	seriesCalls   int
+	historyCalls  int
+	seriesResult  storage.SeriesResult
 	historyResult storage.HistoryResult
-	seriesQuery storage.SeriesQuery
-	historyQuery storage.HistoryQuery
-	err     error
+	seriesQuery   storage.SeriesQuery
+	historyQuery  storage.HistoryQuery
+	err           error
 }
 
 func (s *stub) ListAgents(_ context.Context, q storage.AgentQuery) (storage.AgentResult, error) {
@@ -229,15 +229,19 @@ func TestDashboardOptionsAndListenSafety(t *testing.T) {
 	}
 }
 
-func (s *stub) ListSeries(_ context.Context,q storage.SeriesQuery)(storage.SeriesResult,error){
-    s.seriesCalls++
-    s.seriesQuery=q
-    if s.err!=nil{return storage.SeriesResult{},s.err}
-    return s.seriesResult,nil
+func (s *stub) ListSeries(_ context.Context, q storage.SeriesQuery) (storage.SeriesResult, error) {
+	s.seriesCalls++
+	s.seriesQuery = q
+	if s.err != nil {
+		return storage.SeriesResult{}, s.err
+	}
+	return s.seriesResult, nil
 }
-func (s *stub) ListHistory(_ context.Context,q storage.HistoryQuery)(storage.HistoryResult,error){
-    s.historyCalls++
-    s.historyQuery=q
-    if s.err!=nil{return storage.HistoryResult{},s.err}
-    return s.historyResult,nil
+func (s *stub) ListHistory(_ context.Context, q storage.HistoryQuery) (storage.HistoryResult, error) {
+	s.historyCalls++
+	s.historyQuery = q
+	if s.err != nil {
+		return storage.HistoryResult{}, s.err
+	}
+	return s.historyResult, nil
 }

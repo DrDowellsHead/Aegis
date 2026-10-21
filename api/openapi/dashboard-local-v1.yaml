@@ -95,6 +95,72 @@ paths:
         '400': {description: Invalid query}
         '401': {description: Session invalid or expired}
         '503': {description: Database unavailable}
+  /api/web/series:
+    get:
+      summary: Bounded aggregated time series of one agent
+      description: Cookie-authenticated counterpart of the read-only history series API.
+      parameters:
+        - name: agent_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: from
+          in: query
+          required: true
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          required: true
+          schema: {type: string, format: date-time}
+        - name: step
+          in: query
+          required: true
+          schema: {type: string, enum: [1m, 5m, 15m, 1h, 6h, 24h]}
+        - name: disk_path
+          in: query
+          description: Exact disk path, empty means null disk aggregates
+          schema: {type: string, maxLength: 1024}
+      responses:
+        '200':
+          description: Populated UTC buckets only, missing metrics are nullable
+          content:
+            application/json:
+              schema:
+                $ref: './history-v1.yaml#/components/schemas/Series'
+        '400': {description: Invalid query or oversized time range}
+        '401': {description: Invalid session}
+        '503': {description: Database unavailable}
+  /api/web/measurements:
+    get:
+      summary: Bounded paged raw measurements for one agent
+      description: Cookie-authenticated counterpart of history measurements API.
+      parameters:
+        - name: agent_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: from
+          in: query
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          schema: {type: string, format: date-time}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: cursor
+          in: query
+          schema: {type: string, maxLength: 1024}
+      responses:
+        '200':
+          description: Cursor-paginated measurements with nullable snapshot fields
+          content:
+            application/json:
+              schema:
+                $ref: './history-v1.yaml#/components/schemas/MeasurementPage'
+        '400': {description: Invalid query, cursor or filter combination}
+        '401': {description: Invalid session}
+        '503': {description: Database unavailable}
 components:
   securitySchemes:
     dashboardSession:
