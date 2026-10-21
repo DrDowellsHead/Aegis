@@ -110,7 +110,7 @@ test('local login, real navigation and exact agent chart inspection', async ({ p
   await expect(page.getByRole('heading', { name: 'Отдельные измерения' })).toBeVisible()
   await page.getByLabel('Точная точка').first().selectOption({ index: 1 })
   await expect(page.getByText('UTC:', { exact: false }).first()).toBeVisible()
-  await page.getByLabel('Период').selectOption('custom')
+  await page.getByLabel('Период', { exact: true }).selectOption('custom')
   await page.locator('#custom-from').fill('2026-10-20T08:00')
   await page.locator('#custom-to').fill('2026-10-20T12:00')
   await page.getByRole('button', { name: 'Применить диапазон' }).click()
