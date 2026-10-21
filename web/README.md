@@ -33,3 +33,25 @@ or in `VITE_*` environment variables.
 Contracts: `../api/openapi/history-v1.yaml`,
 `src/api/types.ts`. Design: `../docs/web-ux.md` and
 `../docs/adr/0012-web-architecture.md`.
+
+## Этап 4.2: реальные агенты через локальный Go gateway
+
+`npm run dev` по-прежнему предназначен для верстки — он НЕ проксирует
+API и НЕ предоставляет аутентифицированный вход. Для реальных данных:
+
+```sh
+cd web
+npm ci
+npm run build
+cd ..
+# Set AEGIS_DATABASE_URL and a separate AEGIS_DASHBOARD_TOKEN.
+go run ./cmd/aegis dashboard --listen 127.0.0.1:8082 --static-dir web/dist
+```
+
+Перейдите на http://127.0.0.1:8082. Панель запрашивает сессию,
+после входа показывает подсчёт агентов и пагинированную таблицу.
+HTTP-only cookie хранит состояние на Go-сервере, а введённый секрет
+не сохраняется в localStorage. Через восемь часов сессия истекает.
+
+Это *строго локальный* HTTP сервер, не для публичного деплоя.
+Подробнее: ../docs/adr/0013-local-dashboard-gateway.md.

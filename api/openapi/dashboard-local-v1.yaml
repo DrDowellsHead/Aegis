@@ -1,0 +1,103 @@
+openapi: 3.1.0
+info:
+  title: Aegis local dashboard gateway API
+  version: 1.0.0
+  description: |
+    Numeric-loopback-only development gateway. Browser uses a
+    SameSite=Strict HttpOnly cookie after separate local login.
+    No public Internet deployment or history operator Bearer tokens.
+servers:
+  - url: http://127.0.0.1:8082
+security:
+  - dashboardSession: []
+paths:
+  /api/web/session:
+    get:
+      summary: Check whether the local cookie is authenticated
+      security: []
+      responses:
+        '200':
+          description: Session state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authenticated]
+                properties:
+                  authenticated: {type: boolean}
+  /api/web/login:
+    post:
+      summary: Local single-operator login (requires same Origin)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: {type: string, minLength: 32}
+      responses:
+        '200': {description: HttpOnly session cookie set}
+        '400': {description: Invalid JSON}
+        '401': {description: Invalid secret}
+        '403': {description: Origin mismatch}
+        '429': {description: Too many failed attempts}
+  /api/web/logout:
+    post:
+      summary: Revoke server session (requires same Origin)
+      responses:
+        '200': {description: Session revoked}
+        '403': {description: Origin mismatch}
+  /api/web/agents:
+    get:
+      summary: List registered agents
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 30}
+        - name: cursor
+          in: query
+          description: Last UUID of prior page
+          schema: {type: string, format: uuid}
+        - name: offline_after
+          in: query
+          schema: {type: string, default: 1m}
+      responses:
+        '200':
+          description: Same AgentPage as /api/v1/agents in history-v1.yaml
+        '400': {description: Invalid query}
+        '401': {description: Session invalid or expired}
+        '503': {description: Database unavailable}
+  /api/web/summary:
+    get:
+      summary: Fleet-wide counts by last authenticated contact
+      parameters:
+        - name: offline_after
+          in: query
+          schema: {type: string, default: 1m}
+      responses:
+        '200':
+          description: Snapshot of aggregate counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, online, offline, unknown, checked_at, offline_after]
+                properties:
+                  total: {type: integer, minimum: 0}
+                  online: {type: integer, minimum: 0}
+                  offline: {type: integer, minimum: 0}
+                  unknown: {type: integer, minimum: 0}
+                  checked_at: {type: string, format: date-time}
+                  offline_after: {type: string}
+        '400': {description: Invalid query}
+        '401': {description: Session invalid or expired}
+        '503': {description: Database unavailable}
+components:
+  securitySchemes:
+    dashboardSession:
+      type: apiKey
+      in: cookie
+      name: aegis_dashboard_session

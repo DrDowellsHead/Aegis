@@ -409,3 +409,56 @@ npm run build
 [UX-структура](docs/web-ux.md),
 [OpenAPI контракт](api/openapi/history-v1.yaml),
 [инструкция фронтенда](web/README.md).
+
+## Локальная панель агентов (этап 4.2)
+
+Теперь `aegis dashboard` запускает **отдельный Go-сервер с браузерной
+сессией**, по умолчанию на `127.0.0.1:8082`. Он обращается к PostgreSQL
+на сервере и не передаёт `AEGIS_HISTORY_TOKEN` в JavaScript.
+
+Перед запуском:
+1. Установите Node.js 22+ и выполните `cd web; npm ci; npm run build; cd ..`.
+2. Убедитесь, что `AEGIS_DATABASE_URL` указывает на БД после миграций
+   и команда `aegis receive` синхронизировала зарегистрированные UUID.
+3. Установите **отдельный сильный** `AEGIS_DASHBOARD_TOKEN`. Пример
+   генерации в Windows PowerShell (токен не записывается в репозиторий):
+
+```powershell
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$rng.Dispose()
+$env:AEGIS_DASHBOARD_TOKEN = [Convert]::ToBase64String($bytes)
+
+go run ./cmd/aegis dashboard --listen 127.0.0.1:8082 --static-dir web/dist
+```
+
+Откройте **http://127.0.0.1:8082** и введите сгенерированный токен
+панели. В другой PowerShell-сессии нужно предварительно задать
+`AEGIS_DATABASE_URL` и `AEGIS_DASHBOARD_TOKEN` заново: переменные
+окружения процесса не копируются между терминалами автоматически.
+В браузере теперь доступны настоящая сводка состояний и список
+агентов, страницы по UUID, ручное обновление и периодическое обновление
+раз в 30 секунд в видимой вкладке.
+
+Сервер ОБЯЗАТЕЛЬНО слушает только числовой loopback. Это **локальная
+версия**, не готовая к публикации на VPS: текущая HTTP-сессия без HTTPS
+не предназначена для внешней сети. Не открывайте порт 8082 через
+публичный reverse proxy, SSH-туннель в общедоступную сеть или NAT.
+
+Исполняемый Go-архив пока не содержит собранный React: `web/dist/`
+строится отдельно. На будущих этапах добавим упаковку фронтенда
+в дистрибутив и полноценный HTTPS/RBAC шлюз.
+
+[ADR 0013](docs/adr/0013-local-dashboard-gateway.md) ·
+[OpenAPI веб-шлюза](api/openapi/dashboard-local-v1.yaml).
+
+## Лицензия
+
+Aegis открыт для использования и распространения под
+[Apache License 2.0](LICENSE) с [NOTICE](NOTICE), в котором указан
+разработчик **DrDowellsHead** — https://github.com/DrDowellsHead.
+При распространении производных версий нужно сохранять предусмотренное
+лицензией уведомление об авторстве. Это не обязывает публично упоминать
+автора при каждом частном запуске программы; подробнее см.
+[разбор лицензии](docs/licensing.md).

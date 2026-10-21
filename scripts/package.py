@@ -50,6 +50,8 @@ def main():
                      "-o", str(binary), "./cmd/aegis"], cwd=root, env=env, check=True,
                 )
                 shutil.copy2(root / "README.md", stage)
+                shutil.copy2(root / "LICENSE", stage)
+                shutil.copy2(root / "NOTICE", stage)
                 shutil.copy2(root / "docs" / "installation.md", stage / "INSTALL.md")
                 shutil.copy2(root / "docs" / "metrics.md", stage / "METRICS.md")
                 for folder, path in licenses:
