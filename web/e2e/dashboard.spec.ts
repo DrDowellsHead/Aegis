@@ -54,6 +54,15 @@ async function mockDashboard(page: Page, options: MockOptions = {}) {
       await respond(200, { revoked: 1 }); return
     }
 
+    if (name === '/api/web/activity') {
+      await respond(200, { items: [{
+        id: 101, at: '2026-10-21T10:00:00Z',
+        category: 'incident', action: 'opened', actor: 'operator',
+        agent_id: ID, incident_id: ID, reference_id: '',
+        summary: 'CPU high', details: { kind: 'threshold', severity: 'warning' }
+      }], has_more: false })
+      return
+    }
     if (name === '/api/web/notifications/stats') {
       await respond(200, { pending: 3, retry: 1, leased: 0, sent: 7, dead: 0 }); return
     }
@@ -354,4 +363,29 @@ test('incident page displays aggregate delivery stats without secret data', asyn
   await page.goto('/incidents')
   await expect(page.getByLabel('Доставка уведомлений')).toBeVisible()
   await expect(page.getByText('Ожидают: 3', { exact: false })).toBeVisible()
+})
+
+test('journal is searchable and accessible to viewers without mutation controls', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'viewer' })
+  await page.goto('/activity')
+  await expect(page.getByRole('heading', { name: 'Журнал событий' })).toBeVisible()
+  await expect(page.getByText('CPU high')).toBeVisible()
+  await expect(page.getByText('Открытие')).toBeVisible()
+  await page.getByLabel('Категория').selectOption('incident')
+  await page.getByLabel('Оператор или система').fill('operator')
+  await page.getByRole('button', { name: 'Искать' }).click()
+  await expect(page.getByText('CPU high')).toBeVisible()
+  await page.getByText('Подробности').click()
+  await expect(page.getByText('threshold', { exact: false })).toBeVisible()
+})
+test('journal validates UUID and search length before API request', async ({ page }) => {
+  await mockDashboard(page, { remote: true, role: 'admin' })
+  await page.goto('/activity')
+  await page.getByLabel('UUID агента').fill('wrong-id')
+  await page.getByRole('button', { name: 'Искать' }).click()
+  await expect(page.getByRole('alert')).toContainText('UUID')
+  await page.getByLabel('UUID агента').fill('')
+  await page.getByLabel('Поиск по названию').fill('x')
+  await page.getByRole('button', { name: 'Искать' }).click()
+  await expect(page.getByRole('alert')).toContainText('2–80')
 })
