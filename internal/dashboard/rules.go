@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"time"
 
@@ -132,7 +133,8 @@ func readRuleJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 		fail(w, http.StatusBadRequest, "invalid_query")
 		return false
 	}
-	if r.Header.Get("Content-Type") != "application/json" {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
 		fail(w, http.StatusUnsupportedMediaType, "json_required")
 		return false
 	}
