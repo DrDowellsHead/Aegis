@@ -249,7 +249,10 @@ func resolveIncident(ctx context.Context, tx *sql.Tx, agentID, ruleID, kind, rea
 // EvaluateAgentLiveness is deliberately explicit in step 5.3.
 // An UNKNOWN never-contacted agent does not generate an offline incident.
 // This row lock serializes evaluation with authenticated heartbeat updates.
-func (p *Postgres) EvaluateAgentLiveness(ctx context.Context, agentID string, offlineAfter time.Duration) (string, error) {
+func (p *Postgres) EvaluateAgentLiveness(ctx context.Context,agentID string,offlineAfter time.Duration)(string,error){
+	return p.EvaluateAgentLivenessAs(ctx,agentID,offlineAfter,"system")
+}
+func (p *Postgres) EvaluateAgentLivenessAs(ctx context.Context,agentID string,offlineAfter time.Duration,actor string)(string,error) {
 	if !identity.ValidID(agentID) || offlineAfter < 10*time.Second ||
 		offlineAfter > 24*time.Hour || offlineAfter%time.Second != 0 {
 		return "", fmt.Errorf("invalid liveness evaluation arguments")
@@ -296,6 +299,9 @@ func (p *Postgres) EvaluateAgentLiveness(ctx context.Context, agentID string, of
 			return "", err
 		}
 	}
+	if err=appendOperatorAction(ctx,tx,actor,"connectivity_evaluated",agentID,agentID,
+		"Ручная проверка доступности агента",
+		map[string]any{"status":state,"offline_after_seconds":int(offlineAfter/time.Second)});err!=nil{return "",err}
 	if err = tx.Commit(); err != nil {
 		return "", fmt.Errorf("commit liveness evaluation: %w", err)
 	}
