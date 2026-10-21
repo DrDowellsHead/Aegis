@@ -17,7 +17,9 @@ const publicOriginForTest = "https://panel.example:8443"
 
 func remoteRequest(h http.Handler, method, path, body, origin string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, publicOriginForTest+path, strings.NewReader(body))
-	if method == http.MethodPost { r.Header.Set("Content-Type", "application/json") }
+	if method == http.MethodPost {
+		r.Header.Set("Content-Type", "application/json")
+	}
 	r.TLS = &tls.ConnectionState{}
 	if origin != "" {
 		r.Header.Set("Origin", origin)
