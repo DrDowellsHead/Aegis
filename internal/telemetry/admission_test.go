@@ -76,7 +76,7 @@ func TestReceiverBusyRejectsWithoutSavingAndPreservesHeartbeat(t *testing.T) {
 		release: make(chan struct{}),
 	}
 	receiver := &Receiver{
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 		registry: registry, store: store,
 		admission: newReceiverAdmission(ReceiverLimits{Measurements: 1, Heartbeats: 1, PerAgent: 1}),
 	}

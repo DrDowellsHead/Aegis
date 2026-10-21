@@ -33,9 +33,9 @@ type HeartbeatRecorder interface {
 // Receiver authenticates before consulting the durable store.
 type Receiver struct {
 	pb.UnimplementedTelemetryServiceServer
-	logger   *slog.Logger
-	registry identity.Registry
-	store    MeasurementStore
+	logger    *slog.Logger
+	registry  identity.Registry
+	store     MeasurementStore
 	admission *receiverAdmission
 }
 
