@@ -165,6 +165,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		h.remoteAdmin(w, r, false)
 		return
+	case "/api/web/admin/security-events":
+		h.securityEvents(w,r)
+		return
 	case "/api/web/admin/sessions/revoke":
 		if h.remote == nil {
 			fail(w, http.StatusNotFound, "not_found")
@@ -361,9 +364,23 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	if key, ok := h.authorized(r); ok {
-		h.mu.Lock()
-		delete(h.sessions, key)
-		h.mu.Unlock()
+		if h.remote!=nil{
+			h.mu.Lock()
+			current,found:=h.sessions[key]
+			if found && !h.securityEvent(r.Context(),storage.SecurityEventInput{
+				Action:"logout",Actor:current.username,Role:string(current.role),
+			}){
+				h.mu.Unlock()
+				fail(w,http.StatusServiceUnavailable,"audit_unavailable")
+				return
+			}
+			delete(h.sessions,key)
+			h.mu.Unlock()
+		}else{
+			h.mu.Lock()
+			delete(h.sessions,key)
+			h.mu.Unlock()
+		}
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: "", Path: "/", HttpOnly: true,
