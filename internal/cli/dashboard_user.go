@@ -23,7 +23,9 @@ func runDashboardUser(args []string, out, errOut io.Writer) int {
 	remove := flags.Bool("remove", false, "remove an existing account")
 	stdin := flags.Bool("password-stdin", false, "read password from standard input without command-line arguments")
 	if err := flags.Parse(args); err != nil {
-		if err == flag.ErrHelp { return 0 }
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || *file == "" || *username == "" {

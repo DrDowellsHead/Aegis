@@ -4,10 +4,10 @@ package dashboard
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -38,9 +38,9 @@ type Reader interface {
 }
 
 type session struct {
-	expires time.Time
+	expires  time.Time
 	username string
-	role Role
+	role     Role
 }
 type Handler struct {
 	reader         Reader
@@ -155,14 +155,29 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logout(w, r)
 		return
 	case "/api/web/admin/users":
-		if h.remote == nil { fail(w, http.StatusNotFound, "not_found"); return }
-		if r.Method != http.MethodGet { methodNotAllowed(w, "GET"); return }
+		if h.remote == nil {
+			fail(w, http.StatusNotFound, "not_found")
+			return
+		}
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w, "GET")
+			return
+		}
 		h.remoteAdmin(w, r, false)
 		return
 	case "/api/web/admin/sessions/revoke":
-		if h.remote == nil { fail(w, http.StatusNotFound, "not_found"); return }
-		if r.Method != http.MethodPost { methodNotAllowed(w, "POST"); return }
-		if !h.originAllowed(r) { fail(w, http.StatusForbidden, "invalid_origin"); return }
+		if h.remote == nil {
+			fail(w, http.StatusNotFound, "not_found")
+			return
+		}
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, "POST")
+			return
+		}
+		if !h.originAllowed(r) {
+			fail(w, http.StatusForbidden, "invalid_origin")
+			return
+		}
 		h.remoteAdmin(w, r, true)
 		return
 	case "/api/web/agents":
@@ -492,7 +507,6 @@ func (h *Handler) measurements(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, page)
 }
 
-
 // ServeRemote runs a direct TLS server. Never accept X-Forwarded-* as a
 // substitute for a real TLS connection; browsers connect directly.
 func ServeRemote(ctx context.Context, listener net.Listener, handler http.Handler, logger *slog.Logger, certPath, keyPath string) error {
@@ -527,9 +541,13 @@ func ServeRemote(ctx context.Context, listener net.Listener, handler http.Handle
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := srv.Shutdown(shutdownCtx)
-		if err != nil { _ = srv.Close() }
+		if err != nil {
+			_ = srv.Close()
+		}
 		serveErr := <-done
-		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) { return serveErr }
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			return serveErr
+		}
 		return err
 	}
 }

@@ -1,16 +1,16 @@
 package dashboard
 
 import (
-		"crypto/rand"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
-	"crypto/tls"
-	"crypto/x509"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,12 +20,12 @@ import (
 )
 
 type remoteAuth struct {
-	origin      string
-	accounts    map[string]Account
-	dummyHash   []byte
-	attemptsIP  map[string][]time.Time
+	origin       string
+	accounts     map[string]Account
+	dummyHash    []byte
+	attemptsIP   map[string][]time.Time
 	attemptsUser map[string][]time.Time
-	attemptsAll []time.Time
+	attemptsAll  []time.Time
 }
 
 func NewRemote(reader Reader, usersFile, publicOrigin, staticDir string, logger *slog.Logger) (*Handler, error) {
@@ -56,7 +56,7 @@ func NewRemote(reader Reader, usersFile, publicOrigin, staticDir string, logger 
 	}
 	h.remote = &remoteAuth{
 		origin: origin, accounts: byName, dummyHash: dummyHash,
-		attemptsIP: make(map[string][]time.Time),
+		attemptsIP:   make(map[string][]time.Time),
 		attemptsUser: make(map[string][]time.Time),
 	}
 	return h, nil
@@ -90,7 +90,7 @@ func (h *Handler) requestHostAllowed(r *http.Request) bool {
 	if h.remote == nil {
 		return validHost(r.Host)
 	}
-	return r.TLS != nil && "https://" + r.Host == h.remote.origin
+	return r.TLS != nil && "https://"+r.Host == h.remote.origin
 }
 
 func (h *Handler) originAllowed(r *http.Request) bool {
@@ -255,7 +255,9 @@ func (h *Handler) remoteAdmin(w http.ResponseWriter, r *http.Request, revoke boo
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	var body struct { Username string `json:"username"` }
+	var body struct {
+		Username string `json:"username"`
+	}
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if d.Decode(&body) != nil || d.Decode(new(any)) != io.EOF || !validUsername(body.Username) {
@@ -290,12 +292,20 @@ func sortAccounts(users []map[string]any) {
 // CheckServerCertificate parses the certificate early; client-side hostname
 // verification still remains mandatory for anyone connecting to the server.
 func CheckServerCertificate(certPath, keyPath, publicOrigin string) error {
-	if _, err := validatePublicOrigin(publicOrigin); err != nil { return err }
+	if _, err := validatePublicOrigin(publicOrigin); err != nil {
+		return err
+	}
 	pair, err := tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil { return fmt.Errorf("load dashboard TLS certificate: %w", err) }
-	if len(pair.Certificate) == 0 { return fmt.Errorf("empty dashboard TLS certificate") }
+	if err != nil {
+		return fmt.Errorf("load dashboard TLS certificate: %w", err)
+	}
+	if len(pair.Certificate) == 0 {
+		return fmt.Errorf("empty dashboard TLS certificate")
+	}
 	cert, err := x509.ParseCertificate(pair.Certificate[0])
-	if err != nil { return fmt.Errorf("parse dashboard TLS certificate: %w", err) }
+	if err != nil {
+		return fmt.Errorf("parse dashboard TLS certificate: %w", err)
+	}
 	u, _ := url.Parse(publicOrigin)
 	if err := cert.VerifyHostname(u.Hostname()); err != nil {
 		return fmt.Errorf("dashboard certificate does not match public origin host: %w", err)

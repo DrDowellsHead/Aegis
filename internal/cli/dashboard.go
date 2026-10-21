@@ -8,8 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"strings"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/dashboard"

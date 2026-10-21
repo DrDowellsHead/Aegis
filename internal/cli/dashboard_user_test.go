@@ -14,7 +14,9 @@ import (
 func TestDashboardUserCommand(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "users.json")
 	read, write, err := os.Pipe()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, _ = io.WriteString(write, "long-and-random-example-password\n")
 	_ = write.Close()
 	originalStdin := os.Stdin
@@ -25,7 +27,9 @@ func TestDashboardUserCommand(t *testing.T) {
 	code := Run(context.Background(), []string{
 		"dashboard-user", "--file", file, "--username", "operator", "--role", "admin", "--password-stdin",
 	}, &out, &errOut, "test")
-	if code != 0 { t.Fatalf("code=%d: %s", code, errOut.String()) }
+	if code != 0 {
+		t.Fatalf("code=%d: %s", code, errOut.String())
+	}
 	accounts, err := dashboard.LoadAccounts(file)
 	if err != nil || len(accounts) != 1 || accounts[0].Role != dashboard.RoleAdmin {
 		t.Fatalf("account provisioning: %+v %v", accounts, err)
