@@ -41,6 +41,16 @@ func incidentDB(t *testing.T) (*Postgres, context.Context, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
+		// Notification attempts/jobs reference incident transition events.
+		_, _ = db.db.ExecContext(context.Background(),
+			`DELETE FROM aegis_notification_attempts WHERE job_id IN
+			  (SELECT j.id FROM aegis_notification_jobs j
+			   JOIN aegis_incident_events e ON e.id=j.event_id
+			   JOIN aegis_incidents i ON i.id=e.incident_id WHERE i.agent_id=$1)`,agentID)
+		_, _ = db.db.ExecContext(context.Background(),
+			`DELETE FROM aegis_notification_jobs WHERE event_id IN
+			  (SELECT e.id FROM aegis_incident_events e
+			   JOIN aegis_incidents i ON i.id=e.incident_id WHERE i.agent_id=$1)`,agentID)
 		_, _ = db.db.ExecContext(context.Background(),
 			"DELETE FROM aegis_incident_events WHERE incident_id IN (SELECT id FROM aegis_incidents WHERE agent_id=$1)", agentID)
 		_, _ = db.db.ExecContext(context.Background(), "DELETE FROM aegis_incidents WHERE agent_id=$1", agentID)
