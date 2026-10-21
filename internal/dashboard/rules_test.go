@@ -14,16 +14,21 @@ import (
 type fakeRuleReader struct {
 	*stub
 	listCalls, createCalls, deleteCalls, evaluateCalls int
-	fail error
+	fail                                               error
 }
+
 func (f *fakeRuleReader) CreateRule(_ context.Context, input storage.RuleInput) (storage.RuleRecord, error) {
 	f.createCalls++
-	if f.fail != nil { return storage.RuleRecord{}, f.fail }
+	if f.fail != nil {
+		return storage.RuleRecord{}, f.fail
+	}
 	return storage.RuleRecord{RuleInput: input, ID: exampleAgent, LastStatus: "not_evaluated"}, nil
 }
 func (f *fakeRuleReader) ListRules(_ context.Context, _ string) ([]storage.RuleRecord, error) {
 	f.listCalls++
-	if f.fail != nil { return nil, f.fail }
+	if f.fail != nil {
+		return nil, f.fail
+	}
 	return []storage.RuleRecord{{ID: exampleAgent, RuleInput: storage.RuleInput{
 		AgentID: exampleAgent, Rule: alerts.Rule{Name: "CPU", Metric: "cpu", Direction: "above",
 			FireAt: 85, RecoverAt: 70, WindowSeconds: 300, MinSamples: 3, MaxAgeSeconds: 120},
@@ -31,7 +36,9 @@ func (f *fakeRuleReader) ListRules(_ context.Context, _ string) ([]storage.RuleR
 }
 func (f *fakeRuleReader) DeleteRule(_ context.Context, _ string) (bool, error) {
 	f.deleteCalls++
-	if f.fail != nil { return false, f.fail }
+	if f.fail != nil {
+		return false, f.fail
+	}
 	return true, nil
 }
 func (f *fakeRuleReader) EvaluateRules(ctx context.Context, agentID string) ([]storage.RuleRecord, error) {
@@ -57,7 +64,9 @@ func TestRuleRoutesAuthorizationAndMutations(t *testing.T) {
 	}
 	for _, path := range []string{"/api/web/rules", "/api/web/rules/delete", "/api/web/rules/evaluate"} {
 		w := remoteRequest(h, "POST", path, sampleRule, publicOriginForTest, viewer)
-		if w.Code != 403 { t.Errorf("viewer mutation %s: %d", path, w.Code) }
+		if w.Code != 403 {
+			t.Errorf("viewer mutation %s: %d", path, w.Code)
+		}
 	}
 	if w := remoteRequest(h, "POST", "/api/web/rules", sampleRule, "https://evil.example", admin); w.Code != 403 {
 		t.Fatalf("CSRF failed: %d", w.Code)
@@ -86,19 +95,21 @@ func TestRuleRoutesMalformedAndRedactedErrors(t *testing.T) {
 	for _, path := range []string{
 		"/api/web/rules",
 		"/api/web/rules?agent_id=no",
-		"/api/web/rules?agent_id="+exampleAgent+"&agent_id="+exampleAgent,
-		"/api/web/rules?agent_id="+exampleAgent+"&extra=1",
+		"/api/web/rules?agent_id=" + exampleAgent + "&agent_id=" + exampleAgent,
+		"/api/web/rules?agent_id=" + exampleAgent + "&extra=1",
 	} {
 		if w := request(h, "GET", path, "", "", cookie); w.Code != 400 {
 			t.Errorf("bad query %s: %d", path, w.Code)
 		}
 	}
-	for _, data := range []string{`{}`, `{"unexpected":1}`, sampleRule+`{}`} {
+	for _, data := range []string{`{}`, `{"unexpected":1}`, sampleRule + `{}`} {
 		if w := request(h, "POST", "/api/web/rules", data, "http://127.0.0.1:8082", cookie); w.Code != 400 {
 			t.Errorf("bad JSON: %d", w.Code)
 		}
 	}
-	if fake.listCalls != 0 || fake.createCalls != 0 { t.Fatal("invalid query reached storage") }
+	if fake.listCalls != 0 || fake.createCalls != 0 {
+		t.Fatal("invalid query reached storage")
+	}
 	fake.fail = errors.New("postgres://user:secret-password@server")
 	w := request(h, "GET", "/api/web/rules?agent_id="+exampleAgent, "", "", cookie)
 	if w.Code != http.StatusServiceUnavailable || strings.Contains(w.Body.String(), "secret-password") {

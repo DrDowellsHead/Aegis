@@ -23,14 +23,14 @@ type RuleInput struct {
 
 type RuleRecord struct {
 	RuleInput
-	ID              string     `json:"id"`
-	Firing          bool       `json:"firing"`
-	LastStatus      string     `json:"last_status"`
-	LastAverage     *float64   `json:"last_average"`
-	SampleCount     int64      `json:"sample_count"`
-	LastSampleAt    *time.Time `json:"last_sample_at"`
-	EvaluatedAt     *time.Time `json:"evaluated_at"`
-	ChangedAt       *time.Time `json:"changed_at"`
+	ID           string     `json:"id"`
+	Firing       bool       `json:"firing"`
+	LastStatus   string     `json:"last_status"`
+	LastAverage  *float64   `json:"last_average"`
+	SampleCount  int64      `json:"sample_count"`
+	LastSampleAt *time.Time `json:"last_sample_at"`
+	EvaluatedAt  *time.Time `json:"evaluated_at"`
+	ChangedAt    *time.Time `json:"changed_at"`
 }
 
 func validateRuleInput(input RuleInput) error {
@@ -55,34 +55,57 @@ func readRule(rows interface{ Scan(...any) error }) (RuleRecord, error) {
 		&r.MaxAgeSeconds, &r.DiskPath, &r.Firing, &r.LastStatus,
 		&value, &r.SampleCount, &last, &evaluated, &changed,
 	)
-	if err != nil { return RuleRecord{}, err }
+	if err != nil {
+		return RuleRecord{}, err
+	}
 	r.LastAverage = floatPointer(value)
-	if last.Valid { v := last.Time.UTC(); r.LastSampleAt = &v }
-	if evaluated.Valid { v := evaluated.Time.UTC(); r.EvaluatedAt = &v }
-	if changed.Valid { v := changed.Time.UTC(); r.ChangedAt = &v }
+	if last.Valid {
+		v := last.Time.UTC()
+		r.LastSampleAt = &v
+	}
+	if evaluated.Valid {
+		v := evaluated.Time.UTC()
+		r.EvaluatedAt = &v
+	}
+	if changed.Valid {
+		v := changed.Time.UTC()
+		r.ChangedAt = &v
+	}
 	return r, nil
 }
 
 // CreateRule serializes rule creation per agent and never creates an
 // incident or a notification. Duplicate names are rejected.
 func (p *Postgres) CreateRule(ctx context.Context, input RuleInput) (RuleRecord, error) {
-	if err := validateRuleInput(input); err != nil { return RuleRecord{}, err }
-	if p == nil || p.db == nil { return RuleRecord{}, fmt.Errorf("database unavailable") }
+	if err := validateRuleInput(input); err != nil {
+		return RuleRecord{}, err
+	}
+	if p == nil || p.db == nil {
+		return RuleRecord{}, fmt.Errorf("database unavailable")
+	}
 	tx, err := p.db.BeginTx(ctx, nil)
-	if err != nil { return RuleRecord{}, fmt.Errorf("begin rule create: %w", err) }
+	if err != nil {
+		return RuleRecord{}, fmt.Errorf("begin rule create: %w", err)
+	}
 	defer tx.Rollback()
 	var registered bool
 	if err := tx.QueryRowContext(ctx,
 		"SELECT registered FROM aegis_agents WHERE agent_id=$1 FOR UPDATE", input.AgentID).Scan(&registered); err != nil {
-		if errors.Is(err, sql.ErrNoRows) { return RuleRecord{}, ErrRuleAgent }
+		if errors.Is(err, sql.ErrNoRows) {
+			return RuleRecord{}, ErrRuleAgent
+		}
 		return RuleRecord{}, fmt.Errorf("validate rule agent: %w", err)
 	}
-	if !registered { return RuleRecord{}, ErrRuleAgent }
+	if !registered {
+		return RuleRecord{}, ErrRuleAgent
+	}
 	var count int
 	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM aegis_threshold_rules WHERE agent_id=$1", input.AgentID).Scan(&count); err != nil {
 		return RuleRecord{}, fmt.Errorf("count threshold rules: %w", err)
 	}
-	if count >= 50 { return RuleRecord{}, ErrRuleLimit }
+	if count >= 50 {
+		return RuleRecord{}, ErrRuleLimit
+	}
 	var id string
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO aegis_threshold_rules
@@ -103,44 +126,68 @@ func (p *Postgres) CreateRule(ctx context.Context, input RuleInput) (RuleRecord,
 		"INSERT INTO aegis_rule_states (rule_id) VALUES($1)", id); err != nil {
 		return RuleRecord{}, fmt.Errorf("initialize threshold state: %w", err)
 	}
-	if err := tx.Commit(); err != nil { return RuleRecord{}, fmt.Errorf("commit threshold rule: %w", err) }
+	if err := tx.Commit(); err != nil {
+		return RuleRecord{}, fmt.Errorf("commit threshold rule: %w", err)
+	}
 	return RuleRecord{RuleInput: input, ID: id, LastStatus: "not_evaluated"}, nil
 }
 
 func (p *Postgres) ListRules(ctx context.Context, agentID string) ([]RuleRecord, error) {
-	if !identity.ValidID(agentID) { return nil, fmt.Errorf("invalid agent ID") }
-	if p == nil || p.db == nil { return nil, fmt.Errorf("database unavailable") }
+	if !identity.ValidID(agentID) {
+		return nil, fmt.Errorf("invalid agent ID")
+	}
+	if p == nil || p.db == nil {
+		return nil, fmt.Errorf("database unavailable")
+	}
 	rows, err := p.db.QueryContext(ctx, "SELECT "+ruleColumns+
 		" FROM aegis_threshold_rules r JOIN aegis_rule_states s ON s.rule_id=r.id WHERE r.agent_id=$1 ORDER BY r.name,r.id", agentID)
-	if err != nil { return nil, fmt.Errorf("list threshold rules: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("list threshold rules: %w", err)
+	}
 	defer rows.Close()
 	out := make([]RuleRecord, 0)
 	for rows.Next() {
 		r, err := readRule(rows)
-		if err != nil { return nil, fmt.Errorf("scan threshold rule: %w", err) }
+		if err != nil {
+			return nil, fmt.Errorf("scan threshold rule: %w", err)
+		}
 		out = append(out, r)
 	}
-	if err := rows.Err(); err != nil { return nil, fmt.Errorf("iterate threshold rules: %w", err) }
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate threshold rules: %w", err)
+	}
 	return out, nil
 }
 
 func (p *Postgres) DeleteRule(ctx context.Context, ruleID string) (bool, error) {
-	if !identity.ValidID(ruleID) { return false, fmt.Errorf("invalid rule ID") }
-	if p == nil || p.db == nil { return false, fmt.Errorf("database unavailable") }
+	if !identity.ValidID(ruleID) {
+		return false, fmt.Errorf("invalid rule ID")
+	}
+	if p == nil || p.db == nil {
+		return false, fmt.Errorf("database unavailable")
+	}
 	result, err := p.db.ExecContext(ctx, "DELETE FROM aegis_threshold_rules WHERE id=$1", ruleID)
-	if err != nil { return false, fmt.Errorf("delete threshold rule: %w", err) }
+	if err != nil {
+		return false, fmt.Errorf("delete threshold rule: %w", err)
+	}
 	count, err := result.RowsAffected()
-	if err != nil { return false, err }
+	if err != nil {
+		return false, err
+	}
 	return count > 0, nil
 }
 
 func aggregateRule(ctx context.Context, tx *sql.Tx, r RuleRecord, at time.Time) (alerts.Observation, error) {
 	var column string
 	switch r.Metric {
-	case "cpu": column = "cpu_used_percent"
-	case "memory": column = "memory_used_percent"
-	case "disk": column = "disk_used_percent"
-	default: return alerts.Observation{}, fmt.Errorf("unknown persisted metric")
+	case "cpu":
+		column = "cpu_used_percent"
+	case "memory":
+		column = "memory_used_percent"
+	case "disk":
+		column = "disk_used_percent"
+	default:
+		return alerts.Observation{}, fmt.Errorf("unknown persisted metric")
 	}
 	// SQL identifiers are selected from a compile-time whitelist.
 	query := fmt.Sprintf(`SELECT COUNT(*), AVG(%s), MAX(started_at)
@@ -153,9 +200,14 @@ func aggregateRule(ctx context.Context, tx *sql.Tx, r RuleRecord, at time.Time) 
 	err := tx.QueryRowContext(ctx, query, r.AgentID,
 		at.Add(-time.Duration(r.WindowSeconds)*time.Second), at, r.DiskPath).
 		Scan(&obs.Samples, &average, &latest)
-	if err != nil { return alerts.Observation{}, fmt.Errorf("aggregate rule metric: %w", err) }
+	if err != nil {
+		return alerts.Observation{}, fmt.Errorf("aggregate rule metric: %w", err)
+	}
 	obs.Average = floatPointer(average)
-	if latest.Valid { last := latest.Time.UTC(); obs.Latest = &last }
+	if latest.Valid {
+		last := latest.Time.UTC()
+		obs.Latest = &last
+	}
 	return obs, nil
 }
 
@@ -163,30 +215,47 @@ func aggregateRule(ctx context.Context, tx *sql.Tx, r RuleRecord, at time.Time) 
 // for the transaction so concurrent evaluations cannot cause duplicate transitions.
 // The time window uses measured (started_at) UTC, never received_at.
 func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRecord, error) {
-	if !identity.ValidID(agentID) { return nil, fmt.Errorf("invalid agent ID") }
-	if p == nil || p.db == nil { return nil, fmt.Errorf("database unavailable") }
+	if !identity.ValidID(agentID) {
+		return nil, fmt.Errorf("invalid agent ID")
+	}
+	if p == nil || p.db == nil {
+		return nil, fmt.Errorf("database unavailable")
+	}
 	at := time.Now().UTC()
 	tx, err := p.db.BeginTx(ctx, nil)
-	if err != nil { return nil, fmt.Errorf("begin rule evaluation: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("begin rule evaluation: %w", err)
+	}
 	defer tx.Rollback()
 	rows, err := tx.QueryContext(ctx, "SELECT "+ruleColumns+
 		" FROM aegis_threshold_rules r JOIN aegis_rule_states s ON s.rule_id=r.id WHERE r.agent_id=$1 ORDER BY r.id FOR UPDATE OF r,s", agentID)
-	if err != nil { return nil, fmt.Errorf("lock threshold rules: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("lock threshold rules: %w", err)
+	}
 	records := make([]RuleRecord, 0)
 	for rows.Next() {
 		r, err := readRule(rows)
-		if err != nil { rows.Close(); return nil, fmt.Errorf("scan evaluation rule: %w", err) }
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan evaluation rule: %w", err)
+		}
 		records = append(records, r)
 	}
 	err = rows.Err()
 	rows.Close()
-	if err != nil { return nil, fmt.Errorf("read evaluation rules: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("read evaluation rules: %w", err)
+	}
 
 	for i := range records {
 		r := &records[i]
-		if err := alerts.Validate(r.Rule); err != nil { return nil, fmt.Errorf("persisted rule invalid: %w", err) }
+		if err := alerts.Validate(r.Rule); err != nil {
+			return nil, fmt.Errorf("persisted rule invalid: %w", err)
+		}
 		obs, err := aggregateRule(ctx, tx, *r, at)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		out := alerts.Evaluate(r.Rule, r.Firing, obs, at)
 		_, err = tx.ExecContext(ctx, `
 			UPDATE aegis_rule_states SET firing=$2,last_status=$3,
@@ -194,11 +263,18 @@ func (p *Postgres) EvaluateRules(ctx context.Context, agentID string) ([]RuleRec
 			changed_at=CASE WHEN firing<>$2 THEN $7 ELSE changed_at END
 			WHERE rule_id=$1
 		`, r.ID, out.Firing, out.Status, obs.Average, obs.Samples, obs.Latest, at)
-		if err != nil { return nil, fmt.Errorf("store threshold evaluation: %w", err) }
-		if out.Firing != r.Firing { changed := at; r.ChangedAt = &changed }
+		if err != nil {
+			return nil, fmt.Errorf("store threshold evaluation: %w", err)
+		}
+		if out.Firing != r.Firing {
+			changed := at
+			r.ChangedAt = &changed
+		}
 		r.Firing, r.LastStatus, r.LastAverage = out.Firing, out.Status, obs.Average
 		r.SampleCount, r.LastSampleAt, r.EvaluatedAt = obs.Samples, obs.Latest, &at
 	}
-	if err := tx.Commit(); err != nil { return nil, fmt.Errorf("commit threshold evaluation: %w", err) }
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit threshold evaluation: %w", err)
+	}
 	return records, nil
 }

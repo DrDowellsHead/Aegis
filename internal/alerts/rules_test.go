@@ -15,10 +15,10 @@ func TestThresholdHysteresis(t *testing.T) {
 	r := standard()
 	at := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
-		v float64
-		previous bool
+		v                  float64
+		previous           bool
 		status, transition string
-		firing bool
+		firing             bool
 	}{
 		{84.9, false, "normal", "none", false},
 		{85, false, "firing", "fired", true},
@@ -38,14 +38,22 @@ func TestBelowAndUnknownHoldState(t *testing.T) {
 	r := standard()
 	r.Direction, r.FireAt, r.RecoverAt = "below", 15, 25
 	at := time.Now().UTC()
-	if err := Validate(r); err != nil { t.Fatal(err) }
+	if err := Validate(r); err != nil {
+		t.Fatal(err)
+	}
 	out := Evaluate(r, false, Observation{Average: ptr(15), Samples: 3, Latest: &at}, at)
-	if !out.Firing || out.Transition != "fired" { t.Fatal(out) }
+	if !out.Firing || out.Transition != "fired" {
+		t.Fatal(out)
+	}
 	out = Evaluate(r, true, Observation{Average: ptr(20), Samples: 3, Latest: &at}, at)
-	if !out.Firing || out.Transition != "none" { t.Fatal(out) }
+	if !out.Firing || out.Transition != "none" {
+		t.Fatal(out)
+	}
 	out = Evaluate(r, true, Observation{Average: ptr(25), Samples: 3, Latest: &at}, at)
-	if out.Firing || out.Transition != "recovered" { t.Fatal(out) }
-	old := at.Add(-3*time.Minute)
+	if out.Firing || out.Transition != "recovered" {
+		t.Fatal(out)
+	}
+	old := at.Add(-3 * time.Minute)
 	for _, obs := range []Observation{
 		{Samples: 3, Latest: &at},
 		{Average: ptr(0), Samples: 2, Latest: &at},
@@ -60,7 +68,9 @@ func TestBelowAndUnknownHoldState(t *testing.T) {
 }
 func TestRuleValidation(t *testing.T) {
 	r := standard()
-	if err := Validate(r); err != nil { t.Fatal(err) }
+	if err := Validate(r); err != nil {
+		t.Fatal(err)
+	}
 	bads := []Rule{
 		{Metric: "cpu"},
 		{Name: "bad", Metric: "network", Direction: "above", FireAt: 90, RecoverAt: 80, WindowSeconds: 60, MinSamples: 1, MaxAgeSeconds: 30},
@@ -68,9 +78,17 @@ func TestRuleValidation(t *testing.T) {
 		{Name: "bad", Metric: "cpu", Direction: "below", FireAt: 80, RecoverAt: 40, WindowSeconds: 60, MinSamples: 1, MaxAgeSeconds: 30},
 		{Name: "bad", Metric: "cpu", Direction: "above", FireAt: math.NaN(), RecoverAt: 10, WindowSeconds: 60, MinSamples: 1, MaxAgeSeconds: 30},
 	}
-	for _, bad := range bads { if Validate(bad) == nil { t.Fatalf("accepted %+v", bad) } }
+	for _, bad := range bads {
+		if Validate(bad) == nil {
+			t.Fatalf("accepted %+v", bad)
+		}
+	}
 	r.Metric, r.DiskPath = "disk", "/"
-	if err := Validate(r); err != nil { t.Fatal(err) }
+	if err := Validate(r); err != nil {
+		t.Fatal(err)
+	}
 	r.DiskPath = ""
-	if Validate(r) == nil { t.Fatal("disk path required") }
+	if Validate(r) == nil {
+		t.Fatal("disk path required")
+	}
 }

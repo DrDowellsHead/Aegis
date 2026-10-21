@@ -30,7 +30,10 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		if r.URL.Path != "/api/web/rules" { methodNotAllowed(w, "POST"); return }
+		if r.URL.Path != "/api/web/rules" {
+			methodNotAllowed(w, "POST")
+			return
+		}
 		q := r.URL.Query()
 		if len(q) != 1 || len(q["agent_id"]) != 1 || !identity.ValidID(q.Get("agent_id")) {
 			fail(w, http.StatusBadRequest, "invalid_query")
@@ -39,7 +42,10 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 		rules, err := store.ListRules(ctx, q.Get("agent_id"))
-		if err != nil { h.ruleError(w, err); return }
+		if err != nil {
+			h.ruleError(w, err)
+			return
+		}
 		jsonResponse(w, http.StatusOK, map[string]any{"items": rules})
 		return
 	}
@@ -53,40 +59,68 @@ func (h *Handler) rules(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.remote != nil {
 		session, ok := h.remoteSession(r)
-		if !ok { fail(w, http.StatusUnauthorized, "unauthorized"); return }
-		if session.role != RoleAdmin { fail(w, http.StatusForbidden, "forbidden"); return }
+		if !ok {
+			fail(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if session.role != RoleAdmin {
+			fail(w, http.StatusForbidden, "forbidden")
+			return
+		}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	switch r.URL.Path {
 	case "/api/web/rules":
 		var input storage.RuleInput
-		if !readRuleJSON(w, r, &input) { return }
+		if !readRuleJSON(w, r, &input) {
+			return
+		}
 		newRule, err := store.CreateRule(ctx, input)
-		if err != nil { h.ruleError(w, err); return }
+		if err != nil {
+			h.ruleError(w, err)
+			return
+		}
 		h.logger.Info("threshold rule created", "id", newRule.ID, "agent_id", newRule.AgentID)
 		jsonResponse(w, http.StatusCreated, newRule)
 	case "/api/web/rules/delete":
-		var body struct { ID string `json:"id"` }
-		if !readRuleJSON(w, r, &body) { return }
+		var body struct {
+			ID string `json:"id"`
+		}
+		if !readRuleJSON(w, r, &body) {
+			return
+		}
 		if !identity.ValidID(body.ID) {
 			fail(w, http.StatusBadRequest, "invalid_rule_id")
 			return
 		}
 		deleted, err := store.DeleteRule(ctx, body.ID)
-		if err != nil { h.ruleError(w, err); return }
-		if !deleted { fail(w, http.StatusNotFound, "not_found"); return }
+		if err != nil {
+			h.ruleError(w, err)
+			return
+		}
+		if !deleted {
+			fail(w, http.StatusNotFound, "not_found")
+			return
+		}
 		h.logger.Info("threshold rule deleted", "id", body.ID)
 		jsonResponse(w, http.StatusOK, map[string]bool{"deleted": true})
 	case "/api/web/rules/evaluate":
-		var body struct { AgentID string `json:"agent_id"` }
-		if !readRuleJSON(w, r, &body) { return }
+		var body struct {
+			AgentID string `json:"agent_id"`
+		}
+		if !readRuleJSON(w, r, &body) {
+			return
+		}
 		if !identity.ValidID(body.AgentID) {
 			fail(w, http.StatusBadRequest, "invalid_agent_id")
 			return
 		}
 		evaluated, err := store.EvaluateRules(ctx, body.AgentID)
-		if err != nil { h.ruleError(w, err); return }
+		if err != nil {
+			h.ruleError(w, err)
+			return
+		}
 		jsonResponse(w, http.StatusOK, map[string]any{"items": evaluated})
 	default:
 		fail(w, http.StatusNotFound, "not_found")
