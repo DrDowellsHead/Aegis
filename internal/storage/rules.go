@@ -331,9 +331,13 @@ func (p *Postgres) EvaluateRulesAs(ctx context.Context, agentID, actor string) (
 		r.Firing, r.LastStatus, r.LastAverage = out.Firing, out.Status, obs.Average
 		r.SampleCount, r.LastSampleAt, r.EvaluatedAt = obs.Samples, obs.Latest, &at
 	}
-	if err = appendOperatorAction(ctx, tx, actor, "rules_evaluated", agentID, agentID,
-		"Ручная оценка пороговых правил", map[string]any{"rules": len(records)}); err != nil {
-		return nil, err
+	// Scheduled scans do not create an audit row for every device every
+	// interval. Incident transitions are recorded by their DB triggers.
+	if actor != "scheduler" {
+		if err = appendOperatorAction(ctx, tx, actor, "rules_evaluated", agentID, agentID,
+			"Ручная оценка пороговых правил", map[string]any{"rules": len(records)}); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit threshold evaluation: %w", err)
