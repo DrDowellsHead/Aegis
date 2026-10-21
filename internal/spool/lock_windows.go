@@ -23,10 +23,16 @@ func unlockFile(f *os.File) error {
 }
 func checkFreeSpace(dir string, recordBytes int64) error {
 	path, err := windows.UTF16PtrFromString(dir)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	var available uint64
-	if err := windows.GetDiskFreeSpaceEx(path, &available, nil, nil); err != nil { return err }
-	if available < uint64(recordBytes+minFreeBytes) { return ErrDiskSpace }
+	if err := windows.GetDiskFreeSpaceEx(path, &available, nil, nil); err != nil {
+		return err
+	}
+	if available < uint64(recordBytes+minFreeBytes) {
+		return ErrDiskSpace
+	}
 	return nil
 }
 func isDiskFull(err error) bool {

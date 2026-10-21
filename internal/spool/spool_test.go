@@ -2,11 +2,11 @@ package spool
 
 import (
 	"errors"
-	"os/exec"
-	"syscall"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -36,7 +36,9 @@ func TestRestartPreservesIDsAndPartialMetrics(t *testing.T) {
 	if len(r.MeasurementID) != 32 {
 		t.Fatal(r.MeasurementID)
 	}
-	if err := q.Close(); err != nil { t.Fatal(err) }
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
 	restarted, err := Open(dir, testAgent, MaxRecordBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +48,9 @@ func TestRestartPreservesIDsAndPartialMetrics(t *testing.T) {
 		records[0].Snapshot.CPU == nil || records[0].Snapshot.Errors["disk"] != "unavailable" {
 		t.Fatalf("recovery: %+v", records)
 	}
-	if err := restarted.Close(); err != nil { t.Fatal(err) }
+	if err := restarted.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Open(dir, otherAgent, MaxRecordBytes); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("agent identity mismatch allowed: %v", err)
 	}
@@ -70,7 +74,9 @@ func TestBoundedQueueNeverEvicts(t *testing.T) {
 		t.Fatal("expected bounded queue to fill")
 	}
 	before, _ := q.Stats()
-	if err := q.Close(); err != nil { t.Fatal(err) }
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
 	restarted, err := Open(dir, testAgent, MaxRecordBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -95,12 +101,24 @@ func TestCorruptionIsNotSilentlyDropped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 2 || r.MeasurementID == "" { t.Fatal(entries) }
+	if len(entries) != 2 || r.MeasurementID == "" {
+		t.Fatal(entries)
+	}
 	var p string
-	for _, item := range entries { if filepath.Ext(item.Name()) == ".json" { p = filepath.Join(dir, item.Name()) } }
-	if p == "" { t.Fatal("record not found") }
-	if err := os.WriteFile(p, []byte("corrupted"), 0600); err != nil { t.Fatal(err) }
-	if err := q.Close(); err != nil { t.Fatal(err) }
+	for _, item := range entries {
+		if filepath.Ext(item.Name()) == ".json" {
+			p = filepath.Join(dir, item.Name())
+		}
+	}
+	if p == "" {
+		t.Fatal("record not found")
+	}
+	if err := os.WriteFile(p, []byte("corrupted"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Open(dir, testAgent, MaxRecordBytes); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("corruption accepted: %v", err)
 	}
@@ -118,7 +136,9 @@ func TestIncompleteTemporaryFileIsDiscarded(t *testing.T) {
 		t.Fatal(err)
 	}
 	count, _ := q.Stats()
-	if count != 0 { t.Fatal(count) }
+	if count != 0 {
+		t.Fatal(count)
+	}
 	_ = q.Close()
 }
 func TestRejectsUnsafeDirectory(t *testing.T) {
@@ -155,7 +175,9 @@ func TestAckDeletesOnlyConfirmedRecord(t *testing.T) {
 	if n != 1 || used <= 0 {
 		t.Fatalf("count=%d bytes=%d", n, used)
 	}
-	if err := q.Close(); err != nil { t.Fatal(err) }
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
 	reopened, err := Open(dir, testAgent, MaxRecordBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -164,81 +186,139 @@ func TestAckDeletesOnlyConfirmedRecord(t *testing.T) {
 	if !ok || found.MeasurementID != second.MeasurementID {
 		t.Fatalf("wrong surviving record: %+v %v", found, ok)
 	}
-	if err := reopened.Ack(first.MeasurementID); err == nil { t.Fatal("ack of missing record unexpectedly succeeded") }
+	if err := reopened.Ack(first.MeasurementID); err == nil {
+		t.Fatal("ack of missing record unexpectedly succeeded")
+	}
 	_ = reopened.Close()
 }
 
 func TestExclusiveQueueLockAndClosedQueue(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "spool")
 	q, err := Open(dir, testAgent, MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Open(dir, testAgent, MaxRecordBytes); !errors.Is(err, ErrLocked) {
 		t.Fatalf("second open must fail with ErrLocked, got %v", err)
 	}
-	if _, err := q.Append(snapshot()); err != nil { t.Fatal(err) }
-	if err := q.Close(); err != nil { t.Fatal(err) }
-	if err := q.Close(); err != nil { t.Fatal(err) }
-	if _, err := q.Append(snapshot()); !errors.Is(err, ErrClosed) { t.Fatal(err) }
-	if err := q.Ack("missing"); !errors.Is(err, ErrClosed) { t.Fatal(err) }
+	if _, err := q.Append(snapshot()); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Append(snapshot()); !errors.Is(err, ErrClosed) {
+		t.Fatal(err)
+	}
+	if err := q.Ack("missing"); !errors.Is(err, ErrClosed) {
+		t.Fatal(err)
+	}
 	reopened, err := Open(dir, testAgent, MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer reopened.Close()
-	if count, _ := reopened.Stats(); count != 1 { t.Fatalf("lost record: %d", count) }
+	if count, _ := reopened.Stats(); count != 1 {
+		t.Fatalf("lost record: %d", count)
+	}
 }
 
 func TestQueueLockAcrossProcesses(t *testing.T) {
 	if os.Getenv("AEGIS_SPOOL_LOCK_PROBE") == "1" {
 		q, err := Open(os.Getenv("AEGIS_SPOOL_LOCK_DIR"), testAgent, MaxRecordBytes)
-		if q != nil { _ = q.Close() }
-		if !errors.Is(err, ErrLocked) { t.Fatalf("lock not enforced: %v", err) }
+		if q != nil {
+			_ = q.Close()
+		}
+		if !errors.Is(err, ErrLocked) {
+			t.Fatalf("lock not enforced: %v", err)
+		}
 		return
 	}
 	dir := filepath.Join(t.TempDir(), "spool")
 	q, err := Open(dir, testAgent, MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer q.Close()
 	child := exec.Command(os.Args[0], "-test.run=^TestQueueLockAcrossProcesses$")
 	child.Env = append(os.Environ(), "AEGIS_SPOOL_LOCK_PROBE=1", "AEGIS_SPOOL_LOCK_DIR="+dir)
-	if out, err := child.CombinedOutput(); err != nil { t.Fatalf("child: %v\n%s", err, out) }
+	if out, err := child.CombinedOutput(); err != nil {
+		t.Fatalf("child: %v\n%s", err, out)
+	}
 }
 
 func TestFailedWriteAndDiskReservePreserveRecords(t *testing.T) {
 	q, err := Open(filepath.Join(t.TempDir(), "spool"), testAgent, MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer q.Close()
 	first, err := q.Append(snapshot())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	count, used := q.Stats()
 	q.spaceCheck = func(string, int64) error { return ErrDiskSpace }
-	if _, err := q.Append(snapshot()); !errors.Is(err, ErrDiskSpace) { t.Fatalf("low disk: %v", err) }
+	if _, err := q.Append(snapshot()); !errors.Is(err, ErrDiskSpace) {
+		t.Fatalf("low disk: %v", err)
+	}
 	q.spaceCheck = checkFreeSpace
 	q.writeRecord = func(f *os.File, data []byte) error {
 		_, _ = f.Write(data[:len(data)/2])
 		return syscall.ENOSPC
 	}
-	if _, err := q.Append(snapshot()); !errors.Is(err, ErrDiskSpace) { t.Fatalf("short write: %v", err) }
-	c, u := q.Stats()
-	if c != count || u != used { t.Fatalf("failed append changed queue state: %d/%d", c, u) }
-	r, ok := q.Peek()
-	if !ok || r.MeasurementID != first.MeasurementID { t.Fatal("original record disappeared") }
-	files, err := os.ReadDir(q.dir)
-	if err != nil { t.Fatal(err) }
-	for _, f := range files {
-		if f.Name() != ".aegis.lock" && filepath.Ext(f.Name()) != ".json" { t.Fatalf("partial file survived: %s", f.Name()) }
+	if _, err := q.Append(snapshot()); !errors.Is(err, ErrDiskSpace) {
+		t.Fatalf("short write: %v", err)
 	}
-	if err := q.Close(); err != nil { t.Fatal(err) }
+	c, u := q.Stats()
+	if c != count || u != used {
+		t.Fatalf("failed append changed queue state: %d/%d", c, u)
+	}
+	r, ok := q.Peek()
+	if !ok || r.MeasurementID != first.MeasurementID {
+		t.Fatal("original record disappeared")
+	}
+	files, err := os.ReadDir(q.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if f.Name() != ".aegis.lock" && filepath.Ext(f.Name()) != ".json" {
+			t.Fatalf("partial file survived: %s", f.Name())
+		}
+	}
+	if err := q.Close(); err != nil {
+		t.Fatal(err)
+	}
 	restarted, err := Open(q.dir, testAgent, MaxRecordBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer restarted.Close()
-	if n, _ := restarted.Stats(); n != 1 { t.Fatalf("restart lost measurements: %d", n) }
+	if n, _ := restarted.Stats(); n != 1 {
+		t.Fatalf("restart lost measurements: %d", n)
+	}
 }
 
 func TestRejectSymlinkLock(t *testing.T) {
-	if runtime.GOOS == "windows" { t.Skip("Windows symlink privileges vary") }
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows symlink privileges vary")
+	}
 	dir := filepath.Join(t.TempDir(), "spool")
-	if err := os.Mkdir(dir, 0700); err != nil { t.Fatal(err) }
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	target := filepath.Join(t.TempDir(), "target")
-	if err := os.WriteFile(target, nil, 0600); err != nil { t.Fatal(err) }
-	if err := os.Symlink(target, filepath.Join(dir, ".aegis.lock")); err != nil { t.Fatal(err) }
-	if _, err := Open(dir, testAgent, MaxRecordBytes); !errors.Is(err, ErrCorrupt) { t.Fatal(err) }
+	if err := os.WriteFile(target, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, ".aegis.lock")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(dir, testAgent, MaxRecordBytes); !errors.Is(err, ErrCorrupt) {
+		t.Fatal(err)
+	}
 }

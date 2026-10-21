@@ -11,10 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/DrDowellsHead/Aegis/internal/identity"
@@ -43,14 +43,14 @@ type entry struct {
 
 // Queue holds an exclusive OS process lock until Close.
 type Queue struct {
-	mu      sync.Mutex
-	dir     string
-	agentID string
-	limit   int64
-	used    int64
-	entries map[string]entry // key: on-disk filename
-	lock *os.File
-	spaceCheck func(string, int64) error
+	mu          sync.Mutex
+	dir         string
+	agentID     string
+	limit       int64
+	used        int64
+	entries     map[string]entry // key: on-disk filename
+	lock        *os.File
+	spaceCheck  func(string, int64) error
 	writeRecord func(*os.File, []byte) error
 }
 
@@ -98,7 +98,9 @@ func Open(dir, agentID string, maxBytes int64) (queue *Queue, err error) {
 		return nil, fmt.Errorf("inspect spool lock: %w", statErr)
 	}
 	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil { return nil, fmt.Errorf("open spool lock: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("open spool lock: %w", err)
+	}
 	openedInfo, openedErr := lock.Stat()
 	pathInfo, pathErr := os.Lstat(lockPath)
 	if openedErr != nil || pathErr != nil || !openedInfo.Mode().IsRegular() ||
@@ -127,7 +129,9 @@ func Open(dir, agentID string, maxBytes int64) (queue *Queue, err error) {
 	for _, file := range files {
 		name := file.Name()
 		full := filepath.Join(dir, name)
-		if name == ".aegis.lock" { continue }
+		if name == ".aegis.lock" {
+			continue
+		}
 		if strings.HasPrefix(name, ".pending-") {
 			if !file.Type().IsRegular() {
 				return nil, fmt.Errorf("%w: unsafe temporary file", ErrCorrupt)
@@ -163,15 +167,19 @@ func Open(dir, agentID string, maxBytes int64) (queue *Queue, err error) {
 		q.entries[name] = entry{record: r, size: int64(len(raw))}
 		q.used += int64(len(raw))
 	}
-return q, nil
+	return q, nil
 }
 
 // Close releases the OS lock. The lock file must not be deleted.
 func (q *Queue) Close() error {
-	if q == nil { return nil }
+	if q == nil {
+		return nil
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.lock == nil { return nil }
+	if q.lock == nil {
+		return nil
+	}
 	err := unlockFile(q.lock)
 	closeErr := q.lock.Close()
 	q.lock = nil
@@ -180,13 +188,19 @@ func (q *Queue) Close() error {
 
 func writeRecord(file *os.File, data []byte) error {
 	n, err := file.Write(data)
-	if err != nil { return err }
-	if n != len(data) { return syscall.ENOSPC }
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return syscall.ENOSPC
+	}
 	return nil
 }
 
 func spoolIOError(action string, err error) error {
-	if isDiskFull(err) { return fmt.Errorf("%s: %w", action, errors.Join(ErrDiskSpace, err)) }
+	if isDiskFull(err) {
+		return fmt.Errorf("%s: %w", action, errors.Join(ErrDiskSpace, err))
+	}
 	return fmt.Errorf("%s: %w", action, err)
 }
 
@@ -223,11 +237,15 @@ func (q *Queue) Append(snapshot metrics.Snapshot) (Record, error) {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.lock == nil { return Record{}, ErrClosed }
+	if q.lock == nil {
+		return Record{}, ErrClosed
+	}
 	if q.used > q.limit-int64(len(data)) {
 		return Record{}, ErrFull
 	}
-	if err := q.spaceCheck(q.dir, int64(len(data))); err != nil { return Record{}, spoolIOError("check spool free space", err) }
+	if err := q.spaceCheck(q.dir, int64(len(data))); err != nil {
+		return Record{}, spoolIOError("check spool free space", err)
+	}
 	file, err := os.CreateTemp(q.dir, ".pending-")
 	if err != nil {
 		return Record{}, spoolIOError("create spool temp", err)
@@ -305,7 +323,9 @@ func (q *Queue) Peek() (Record, bool) {
 func (q *Queue) Ack(measurementID string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.lock == nil { return ErrClosed }
+	if q.lock == nil {
+		return ErrClosed
+	}
 	for name, item := range q.entries {
 		if item.record.MeasurementID != measurementID {
 			continue
